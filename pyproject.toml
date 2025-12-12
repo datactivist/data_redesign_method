@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intuitiveness"
+version = "0.1.0"
+description = "Data Redesign Method - Intuitive Dataset Library"
+requires-python = ">=3.11"
+dependencies = [
+    "neo4j>=5.0.0",
+    "networkx",
+    "pandas",
+    "matplotlib",
+    "scipy",
+    "scikit-learn",
+    "sentence-transformers",
+    "streamlit>=1.28.0",
+    "streamlit-agraph>=0.0.45",
+    "requests",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "behave"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["intuitiveness*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+testpaths = ["tests"]
+addopts = "-v"

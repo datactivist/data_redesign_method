@@ -1,0 +1,58 @@
+# data_redesign_method Development Guidelines
+
+## Final objective 
+
+For the three datasets here (/Users/arthursarazin/Documents/data_redesign_method/test_data), which are L4 datasets, I need : 
+
+### On descent 
+- a L3 data table that links number of students to middle school scores (test 1) ; a table that links fundings from ADEME and people who got that funding (test 2) ; a table that links internal and external energy consumptions prices (test 3)
+- a L2 table with a category "country side"/"down town" to catogerize middle school (test 1) ; a L2 table that categorizes people who got several ADEME fundings and those who got just one (test 2) ; a L2 table that categorizes energy consumptions prices into "high price"/"low price" (test 3). 
+- a L1 table that lists one score for all middle shool (test 1) ; a L1 table that lists fundings amount per recipient (test 2) ; a L1 table that lists foreign country buying energy (test 3).
+- a L0 datum that gives the average middle school score (test 1) ; a datum that gives the total amount of fundings given by ADEME (test 2) ; a datum that gives the total amount of energy bought from foreign countries (test 3).
+
+### On ascent 
+- a L1 table that lists one score for all middle shool (test 1) ; a L1 table that lists fundings amount per recipient (test 2) ; a L1 table that lists foreign country buying energy (test 3)
+- a L2 table where catorizes high score (above median) and low score (below median) (test 1) ; a L2 table that distinguishes recipients with more than 10k euros funding and those with less than 10k euros funding (test 2) ; a L2 table that categorizes energy consumptions prices into "high price"/"low price" (test 3).
+- a L3 data table that links high scores to the number of students per class (test 1) ; a L2 table that links 10k euro fundings with the types of projects funded (test 2) ; a L3 table that links high energy prices with the type of energy consumed (test 3). 
+
+## Testing requirements
+- All tests results should be documented here (/Users/arthursarazin/Documents/data_redesign_method/tests)
+- All datasets (/Users/arthursarazin/Documents/data_redesign_method/test_data) should be tested with unit tests to ensure the correctness of the data transformations.
+- The ultimate test is a playwright test where the full ascent/descent cycle is conducted on all three datasets, with all intermediate artifacts exported from the interface. 
+
+## Active Technologies
+- The main technology here is the intuitiveness package and all its functionnalities. 
+- All necessary libraries are in a virtual environment : /Users/arthursarazin/Documents/data_redesign_method/myenv311
+- Python 3.11+ + pandas (DataFrames), networkx (graphs), typing (type hints), dataclasses (entities) (001-dataset-redesign-package)
+- JSON files (session exports, test artifacts) (006-playwright-mcp-e2e)
+- Python 3.11 (existing `myenv311` virtual environment) (006-playwright-mcp-e2e)
+- JSON files (session graphs) + CSV files (test data) (006-playwright-mcp-e2e)
+
+## Project Structure
+
+```text
+src/
+tests/
+```
+
+## Commands
+
+cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] pytest [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLOGIES] ruff check .
+
+## Code Style
+
+- I do spec-driven development, everything you code should comply with the constitution (/Users/arthursarazin/Documents/data_redesign_method/.specify/memory/constitution.md). 
+- All tests should be run with playwright MCP as I pay attention to interactions with the user interface.
+- I am a non-programmer and I like code that is easy to read and understand. Please use clear and descriptive names for variables, functions, and classes.
+- When I meet a bug and find the solution, I like to have a troubleshooting.md with the problem and the solution documented for future reference.
+
+
+## Recent Changes
+- 006-playwright-mcp-e2e: Added Python 3.11 (existing `myenv311` virtual environment)
+- 006-playwright-mcp-e2e: Added Python 3.11 (existing `myenv311` virtual environment)
+- 006-playwright-mcp-e2e: Added Python 3.11
+
+
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

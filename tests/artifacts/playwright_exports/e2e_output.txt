@@ -1,0 +1,52 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.9, pytest-9.0.1, pluggy-1.6.0 -- /Users/arthursarazin/Documents/data_redesign_method/myenv311/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/arthursarazin/Documents/data_redesign_method
+configfile: pyproject.toml
+plugins: playwright-0.7.2, base-url-2.1.0
+collecting ... 2025-12-08 17:46:43.718 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2025-12-08 17:46:43.725 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+collected 59 items
+
+tests/e2e/playwright/test_e2e_descent_ascent.py::TestSchoolsE2E::test_full_descent_ascent_cycle[chromium] 
+======================================================================
+🏫 TEST0 SCHOOLS: Full Descent/Ascent E2E Test
+======================================================================
+
+📥 STEP 1: L4 Entry - Uploading files...
+  📸 Screenshot: test0_schools_e2e_01_01_initial_state.png
+  ⏳ Waiting for files to be processed (25s)...
+  📸 Screenshot: test0_schools_e2e_02_02_files_uploaded.png
+  ✅ Files uploaded successfully
+
+🔧 STEP 2: Navigating to data model configuration...
+  ⏳ Waiting for page to load (8s)...
+  📸 Screenshot: test0_schools_e2e_03_03_entity_config.png
+
+📝 STEP 3: Entering domain description...
+  📸 Screenshot: test0_schools_e2e_04_04_domain_description.png
+
+🤖 STEP 4: Generating data model (L4 → L3)...
+  📸 Screenshot: test0_schools_e2e_05_05_model_generated.png
+  ✅ Data model generated
+
+🔨 STEP 5: Building knowledge graph...
+  📸 Screenshot: test0_schools_e2e_06_06_graph_built.png
+
+🧭 STEP 6: Checking for navigation session...
+  📸 Screenshot: test0_schools_e2e_07_07_pre_navigation.png
+  📍 Found navigation controls
+
+⬆️ ASCENT PHASE...
+
+📊 FINAL: Capturing final state...
+  📸 Screenshot: test0_schools_e2e_08_14_final_top.png
+  📸 Screenshot: test0_schools_e2e_09_15_final_bottom.png
+  📄 Results exported to: /Users/arthursarazin/Documents/data_redesign_method/tests/artifacts/playwright_exports/test0_schools_e2e_results.json
+
+======================================================================
+✅ TEST COMPLETED: 9 screenshots captured
+📁 Results: /Users/arthursarazin/Documents/data_redesign_method/tests/artifacts/playwright_exports/test0_schools_e2e_results.json
+======================================================================
+PASSED
+tests/e2e/playwright/test_e2e_descent_ascent.py::TestADEMEE2E::test_full_descent_ascent_cycle[chromium] 
