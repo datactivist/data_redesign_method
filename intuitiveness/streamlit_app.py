@@ -17,8 +17,13 @@ import streamlit as st
 import pandas as pd
 import networkx as nx
 import json
+from pathlib import Path
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
+
+# Get the project root directory for asset paths
+PROJECT_ROOT = Path(__file__).parent.parent
+ASSETS_DIR = PROJECT_ROOT / "assets"
 
 # Import from the package
 from intuitiveness.complexity import (
@@ -68,6 +73,12 @@ from intuitiveness.ui import (
     # Internationalization (006-playwright-mcp-e2e)
     t,
     render_language_toggle_compact,
+    # SaaS-style header and layout (007-streamlit-design-makeup)
+    render_page_header,
+    render_section_header,
+    card,
+    separator,
+    spacer,
 )
 from intuitiveness.persistence import (
     SessionStore,
@@ -88,6 +99,7 @@ from intuitiveness.neo4j_writer import (
     generate_full_ingest_script
 )
 from intuitiveness.neo4j_client import Neo4jClient
+from intuitiveness.styles import inject_all_styles
 import csv
 import io
 
@@ -436,7 +448,10 @@ def render_ascent_progress_bar():
 # =============================================================================
 
 def inject_right_sidebar_css():
-    """Inject CSS for fixed right sidebar progress indicator with pulsing animation."""
+    """Inject CSS for fixed right sidebar progress indicator with pulsing animation.
+
+    Uses design tokens from styles/palette.py for consistency (007-streamlit-design-makeup).
+    """
     st.markdown("""
     <style>
     /* Right sidebar container - fixed position, small and compact */
@@ -447,16 +462,16 @@ def inject_right_sidebar_css():
         transform: translateY(-50%);
         height: auto;
         width: 50px;
-        background: linear-gradient(180deg, #fafafa, #f5f5f5);
-        border: 1px solid #e0e0e0;
-        border-radius: 10px;
+        background: linear-gradient(180deg, var(--color-bg-primary, #fafaf9), var(--color-bg-secondary, #f5f5f4));
+        border: 1px solid var(--color-border, #e7e5e4);
+        border-radius: 0.5rem;
         z-index: 999;
         display: flex;
         flex-direction: column;
         justify-content: center;
         align-items: center;
         padding: 15px 10px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
 
     /* Progress track container */
@@ -493,48 +508,48 @@ def inject_right_sidebar_css():
     }
 
     .transition-bar.completed {
-        background: #22c55e; /* green */
+        background: var(--color-success, #22c55e);
     }
 
     .transition-bar.current-descent {
-        background: #0369a1; /* blue */
+        background: var(--color-accent, #2563eb);
     }
 
     .transition-bar.current-ascent {
-        background: #b45309; /* amber */
+        background: var(--color-warning, #f59e0b);
     }
 
     .transition-bar.pending {
-        background: #d1d5db; /* gray */
+        background: var(--color-text-muted, #a8a29e);
     }
 
     /* Vertical connectors between bars */
     .connector {
         width: 3px;
         height: 80px;
-        background: #e5e7eb;
+        background: var(--color-border, #e7e5e4);
     }
 
     .connector.completed {
-        background: #22c55e;
+        background: var(--color-success, #22c55e);
     }
 
-    /* Pulsing glow animation for current bar */
+    /* Pulsing glow animation for current bar - using accent color */
     @keyframes glow-descent {
         0%, 100% {
-            box-shadow: 0 0 4px #0369a1;
+            box-shadow: 0 0 4px var(--color-accent, #2563eb);
         }
         50% {
-            box-shadow: 0 0 12px #0369a1, 0 0 20px #0369a1;
+            box-shadow: 0 0 12px var(--color-accent, #2563eb), 0 0 20px var(--color-accent, #2563eb);
         }
     }
 
     @keyframes glow-ascent {
         0%, 100% {
-            box-shadow: 0 0 4px #b45309;
+            box-shadow: 0 0 4px var(--color-warning, #f59e0b);
         }
         50% {
-            box-shadow: 0 0 12px #b45309, 0 0 20px #b45309;
+            box-shadow: 0 0 12px var(--color-warning, #f59e0b), 0 0 20px var(--color-warning, #f59e0b);
         }
     }
 
@@ -548,10 +563,10 @@ def inject_right_sidebar_css():
 
     /* Mode label at top */
     .progress-mode-label {
-        font-size: 12px;
-        font-weight: 700;
+        font-size: 0.75rem;
+        font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.05em;
         margin-bottom: 20px;
         writing-mode: vertical-rl;
         text-orientation: mixed;
@@ -559,11 +574,11 @@ def inject_right_sidebar_css():
     }
 
     .progress-mode-label.descent {
-        color: #0369a1;
+        color: var(--color-accent, #2563eb);
     }
 
     .progress-mode-label.ascent {
-        color: #b45309;
+        color: var(--color-warning, #f59e0b);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -672,6 +687,172 @@ def render_step_header(step: dict):
     st.caption(f"Step {st.session_state.current_step + 1} of {len(STEPS)} | {step['level']}")
     st.markdown(f"**{step['description']}**")
     st.divider()
+
+
+def render_methodology_intro():
+    """
+    Render a compelling introduction to the Data Redesign Method.
+
+    Shows the 5 levels of abstraction, explains descent/ascent cycle,
+    and references the scientific research. This creates an inviting
+    experience before the user uploads data.
+    """
+    # Key visual: The 5 Levels of Abstraction
+    st.markdown("""
+    <style>
+    .methodology-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 24px rgba(0, 47, 167, 0.08);
+        border-left: 4px solid #002fa7;
+    }
+    .level-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 8px;
+    }
+    .level-l4 { background: #fee2e2; color: #991b1b; }
+    .level-l3 { background: #fef3c7; color: #92400e; }
+    .level-l2 { background: #dbeafe; color: #1e40af; }
+    .level-l1 { background: #d1fae5; color: #065f46; }
+    .level-l0 { background: #ede9fe; color: #5b21b6; }
+    .cycle-arrow {
+        font-size: 1.5rem;
+        color: #002fa7;
+        margin: 0 8px;
+    }
+    .research-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: #f1f5f9;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        color: #475569;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Introduction card
+    st.markdown("""
+    <div class="methodology-card">
+        <h3 style="margin-top:0; color: #002fa7;">Transform Data Chaos into Clarity</h3>
+        <p style="font-size: 1.05rem; line-height: 1.7; color: #334155;">
+            The Data Redesign Method helps you navigate complex datasets by controlling
+            <strong>abstraction levels</strong>. Like zooming in and out on a map, you can
+            descend from overwhelming complexity to a single atomic insight, then ascend
+            back with purpose-built structure.
+        </p>
+        <div class="research-badge">
+            <span>📚</span> Based on peer-reviewed research by Sarazin, Mourey & Debru (Dataflow Project)
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Two columns: The Cycle + The Levels
+    col_left, col_right = st.columns([1.2, 1])
+
+    with col_left:
+        st.markdown("#### The Descent-Ascent Cycle")
+        st.markdown("""
+        <div style="background: #f8fafc; border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+            <div style="text-align: center; font-size: 1.1rem; margin-bottom: 16px;">
+                <span class="level-badge level-l4">L4</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l3">L3</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l2">L2</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l1">L1</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l0">L0</span>
+            </div>
+            <p style="color: #64748b; font-size: 0.9rem; text-align: center; margin-bottom: 8px;">
+                <strong>DESCENT</strong>: Reduce complexity by 75-100% per level
+            </p>
+            <hr style="border: none; height: 1px; background: linear-gradient(to right, transparent, #cbd5e1, transparent); margin: 16px 0;">
+            <div style="text-align: center; font-size: 1.1rem; margin-bottom: 16px;">
+                <span class="level-badge level-l0">L0</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l1">L1</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l2">L2</span>
+                <span class="cycle-arrow">→</span>
+                <span class="level-badge level-l3">L3</span>
+            </div>
+            <p style="color: #64748b; font-size: 0.9rem; text-align: center; margin: 0;">
+                <strong>ASCENT</strong>: Rebuild with intentional structure
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col_right:
+        st.markdown("#### 5 Levels of Abstraction")
+        levels_data = [
+            ("L0", "Datum", "Single fact: entity-attribute-value", "level-l0"),
+            ("L1", "Vector", "One entity, multiple attributes", "level-l1"),
+            ("L2", "Table", "Multiple entities and attributes", "level-l2"),
+            ("L3", "Graph", "Linkable multi-level datasets", "level-l3"),
+            ("L4", "Chaos", "Unlinkable datasets (your data!)", "level-l4"),
+        ]
+        for level, name, desc, css_class in reversed(levels_data):
+            st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 8px 12px; background: #ffffff; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <span class="level-badge {css_class}">{level}</span>
+                <div>
+                    <strong style="color: #1e293b;">{name}</strong>
+                    <span style="color: #64748b; font-size: 0.85rem;"> — {desc}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # What you'll experience section
+    st.markdown("#### What You'll Experience")
+
+    exp_col1, exp_col2, exp_col3 = st.columns(3)
+
+    with exp_col1:
+        st.markdown("""
+        <div style="background: #eff6ff; border-radius: 12px; padding: 16px; height: 140px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">📊</div>
+            <strong style="color: #1e40af;">Upload & Connect</strong>
+            <p style="font-size: 0.85rem; color: #475569; margin-top: 6px;">
+                AI discovers relationships between your CSV files automatically
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with exp_col2:
+        st.markdown("""
+        <div style="background: #fef3c7; border-radius: 12px; padding: 16px; height: 140px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">🔍</div>
+            <strong style="color: #92400e;">Descend to Insight</strong>
+            <p style="font-size: 0.85rem; color: #475569; margin-top: 6px;">
+                Reduce complexity step-by-step until you reach atomic truth
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with exp_col3:
+        st.markdown("""
+        <div style="background: #d1fae5; border-radius: 12px; padding: 16px; height: 140px;">
+            <div style="font-size: 1.5rem; margin-bottom: 8px;">🚀</div>
+            <strong style="color: #065f46;">Ascend with Purpose</strong>
+            <p style="font-size: 0.85rem; color: #475569; margin-top: 6px;">
+                Rebuild tailored datasets that answer your specific questions
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Call to action
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.info("**Ready to begin?** Upload your CSV files above to start the descent-ascent cycle.")
 
 
 def render_upload_step():
@@ -822,16 +1003,8 @@ def render_upload_step():
                     st.session_state.current_step = 1
                     st.rerun()
     else:
-        # Demo mode with sample data
-        st.markdown("---")
-        st.markdown("**Or use demo data:**")
-        if st.button("Load Demo Data"):
-            # Create sample demo data
-            demo_data = create_demo_data()
-            st.session_state.raw_data = demo_data
-            st.session_state.datasets['l4'] = Level4Dataset(demo_data)
-            st.session_state.current_step = 1
-            st.rerun()
+        # Welcome section when no files are uploaded
+        render_methodology_intro()
 
 
 def render_entities_step():
@@ -4305,6 +4478,9 @@ def main():
         layout="wide"
     )
 
+    # Inject centralized design styles (007-streamlit-design-makeup)
+    inject_all_styles()
+
     # Inject CSS for right sidebar progress indicator (must be early)
     inject_right_sidebar_css()
 
@@ -4356,7 +4532,17 @@ def main():
 
     # Sidebar
     with st.sidebar:
-        st.title("🔄 Data Redesign")
+        # Logo and branding (007-streamlit-design-makeup: Visual Identity)
+        logo_path = ASSETS_DIR / "logo.svg"
+        if logo_path.exists():
+            import base64
+            svg_content = logo_path.read_text()
+            b64 = base64.b64encode(svg_content.encode()).decode()
+            st.markdown(
+                f'<div style="width: 100%; padding: 0.5rem 0;"><img src="data:image/svg+xml;base64,{b64}" style="width: 100%;" /></div>',
+                unsafe_allow_html=True
+            )
+        st.markdown("---")
 
         # Language toggle (006-playwright-mcp-e2e: Bilingual support)
         render_language_toggle_compact()
@@ -4382,19 +4568,10 @@ def main():
         st.divider()
 
         if st.session_state.nav_mode == 'guided':
-            # Guided mode sidebar
+            # Guided mode sidebar - simplified progress indicator
             st.markdown(f"### {t('current_progress')}")
             current_step = STEPS[st.session_state.current_step]
             st.info(f"**{current_step['level']}**: {current_step['title']}")
-
-            st.divider()
-            st.markdown(f"### {t('quick_navigation')}")
-            for i, step in enumerate(STEPS):
-                disabled = i > st.session_state.current_step
-                if st.button(f"{step['level']}: {step['title']}", disabled=disabled, key=f"nav_{i}"):
-                    if i <= st.session_state.current_step:
-                        st.session_state.current_step = i
-                        st.rerun()
         else:
             # Free exploration mode - render exploration tree
             if st.session_state.nav_session:
@@ -4429,10 +4606,12 @@ def main():
 
     # Main content
     if st.session_state.nav_mode == 'guided':
-        # Guided workflow
-        st.title("🔄 Interactive Data Redesign Method")
-        st.markdown(t('transform_data'))
-        st.divider()
+        # Guided workflow - SaaS-style header (007-streamlit-design-makeup)
+        render_page_header(
+            title="Data Redesign Method",
+            subtitle=t('transform_data'),
+            show_accent=True
+        )
 
         # Render current step
         step_id = STEPS[st.session_state.current_step]['id']
@@ -4451,13 +4630,12 @@ def main():
             render_results_step()
 
     else:
-        # Free Exploration Mode - Constitution v1.2.0: Use domain-friendly labels
-        st.title("🔄 Free Exploration Mode")
-        st.markdown(
-            "Navigate freely through your data. "
-            "Use the exploration tree in the sidebar to revisit any previous step."
+        # Free Exploration Mode - SaaS-style header (007-streamlit-design-makeup)
+        render_page_header(
+            title="Free Exploration",
+            subtitle="Navigate freely through your data. Use the exploration tree in the sidebar to revisit any previous step.",
+            show_accent=True
         )
-        st.divider()
 
         # Check for export view
         if st.session_state.nav_export:

@@ -80,9 +80,9 @@ class DragDropRelationshipBuilder:
             if rel["source_entity"] in entities and rel["target_entity"] in entities
         ]
 
-        # Configure graph display
+        # Configure graph display - width reduced to avoid overlap with right sidebar
         config = Config(
-            width=700,
+            width=600,
             height=400,
             directed=True,
             physics=True,

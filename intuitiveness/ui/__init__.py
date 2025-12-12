@@ -63,6 +63,54 @@ from .i18n import (
     SESSION_KEY_LANGUAGE,
 )
 
+# Metric card component (007-streamlit-design-makeup)
+from .metric_card import (
+    render_metric_card,
+    render_metric_card_row,
+)
+
+# Custom alert component (007-streamlit-design-makeup)
+from .alert import (
+    render_alert,
+    info as alert_info,
+    success as alert_success,
+    warning as alert_warning,
+    error as alert_error,
+    tip as alert_tip,
+)
+
+# Custom button component (007-streamlit-design-makeup)
+from .button import (
+    render_button,
+    render_button_row,
+    primary_button,
+    secondary_button,
+    ghost_button,
+    danger_button,
+)
+
+# Custom accordion component (007-streamlit-design-makeup)
+from .accordion import (
+    render_accordion,
+    render_accordion_group,
+)
+
+# SaaS-style header component (007-streamlit-design-makeup)
+from .header import (
+    render_page_header,
+    render_section_header,
+    render_card_header,
+)
+
+# Layout helpers (007-streamlit-design-makeup)
+from .layout import (
+    card,
+    render_card,
+    separator,
+    spacer,
+    two_column_layout,
+)
+
 # Ascent UI forms (004-ascent-precision)
 from .ascent_forms import (
     # Form renderers
@@ -165,4 +213,34 @@ __all__ = [
     'SUPPORTED_LANGUAGES',
     'DEFAULT_LANGUAGE',
     'SESSION_KEY_LANGUAGE',
+    # Metric card component (007-streamlit-design-makeup)
+    'render_metric_card',
+    'render_metric_card_row',
+    # Custom alert component (007-streamlit-design-makeup)
+    'render_alert',
+    'alert_info',
+    'alert_success',
+    'alert_warning',
+    'alert_error',
+    'alert_tip',
+    # Custom button component (007-streamlit-design-makeup)
+    'render_button',
+    'render_button_row',
+    'primary_button',
+    'secondary_button',
+    'ghost_button',
+    'danger_button',
+    # Custom accordion component (007-streamlit-design-makeup)
+    'render_accordion',
+    'render_accordion_group',
+    # SaaS-style header component (007-streamlit-design-makeup)
+    'render_page_header',
+    'render_section_header',
+    'render_card_header',
+    # Layout helpers (007-streamlit-design-makeup)
+    'card',
+    'render_card',
+    'separator',
+    'spacer',
+    'two_column_layout',
 ]
