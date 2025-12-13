@@ -818,6 +818,46 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Selected",
         "fr": "Sélectionné",
     },
+
+    # ============================================
+    # TIME AGO STRINGS
+    # ============================================
+    "just_now": {
+        "en": "just now",
+        "fr": "à l'instant",
+    },
+    "minutes_ago": {
+        "en": "{count} minute(s) ago",
+        "fr": "il y a {count} minute(s)",
+    },
+    "hours_ago": {
+        "en": "{count} hour(s) ago",
+        "fr": "il y a {count} heure(s)",
+    },
+    "yesterday": {
+        "en": "yesterday",
+        "fr": "hier",
+    },
+    "days_ago": {
+        "en": "{count} day(s) ago",
+        "fr": "il y a {count} jour(s)",
+    },
+    "session_saved_ago": {
+        "en": "Your previous session was saved {time_ago}.",
+        "fr": "Votre session précédente a été sauvegardée {time_ago}.",
+    },
+    "at_step_with_files": {
+        "en": "You were at **Step {step}** with **{count} file(s)** uploaded.",
+        "fr": "Vous étiez à l'**Étape {step}** avec **{count} fichier(s)** chargé(s).",
+    },
+    "session_info": {
+        "en": "Session version: {version} | Size: {size} KB",
+        "fr": "Version de session: {version} | Taille: {size} KB",
+    },
+    "confirm_start_fresh": {
+        "en": "This will clear all your uploaded files and progress. Are you sure?",
+        "fr": "Cela effacera tous vos fichiers et votre progression. Êtes-vous sûr ?",
+    },
 }
 
 

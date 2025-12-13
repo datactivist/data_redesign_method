@@ -11,6 +11,7 @@ from typing import Optional
 import streamlit as st
 
 from intuitiveness.persistence import SessionInfo
+from intuitiveness.ui.i18n import t
 
 
 class RecoveryAction(Enum):
@@ -37,18 +38,18 @@ def format_time_ago(timestamp: datetime) -> str:
     seconds = diff.total_seconds()
 
     if seconds < 60:
-        return "just now"
+        return t("just_now")
     elif seconds < 3600:
         minutes = int(seconds / 60)
-        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+        return t("minutes_ago", count=minutes)
     elif seconds < 86400:
         hours = int(seconds / 3600)
-        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+        return t("hours_ago", count=hours)
     elif seconds < 172800:
-        return "yesterday"
+        return t("yesterday")
     else:
         days = int(seconds / 86400)
-        return f"{days} day{'s' if days > 1 else ''} ago"
+        return t("days_ago", count=days)
 
 
 def render_recovery_banner(session_info: SessionInfo) -> RecoveryAction:
@@ -95,24 +96,24 @@ def render_recovery_banner(session_info: SessionInfo) -> RecoveryAction:
         time_ago = format_time_ago(session_info.timestamp)
 
         st.info(f"""
-        **Welcome back!** Your previous session was saved {time_ago}.
+        **{t("welcome_back")}** {t("session_saved_ago", time_ago=time_ago)}
 
-        You were at **Step {session_info.wizard_step + 1}** with **{session_info.file_count} file(s)** uploaded.
+        {t("at_step_with_files", step=session_info.wizard_step + 1, count=session_info.file_count)}
         """)
 
         # Action buttons
         col1, col2, col3 = st.columns([2, 2, 4])
 
         with col1:
-            if st.button("Continue where I left off", type="primary", key="recovery_continue"):
+            if st.button(t("continue_where_left"), type="primary", key="recovery_continue"):
                 return RecoveryAction.CONTINUE
 
         with col2:
-            if st.button("Start fresh", key="recovery_fresh"):
+            if st.button(t("start_fresh"), key="recovery_fresh"):
                 return RecoveryAction.START_FRESH
 
         with col3:
-            st.caption(f"Session version: {session_info.version} | Size: {session_info.total_size_bytes / 1024:.1f} KB")
+            st.caption(t("session_info", version=session_info.version, size=f"{session_info.total_size_bytes / 1024:.1f}"))
 
     return RecoveryAction.PENDING
 
@@ -125,8 +126,8 @@ def render_start_fresh_button() -> bool:
         True if button was clicked
     """
     return st.sidebar.button(
-        "Start Fresh",
-        help="Clear all uploaded files and restart from the beginning",
+        t("start_fresh"),
+        help=t("confirm_start_fresh"),
         key="sidebar_start_fresh"
     )
 
@@ -138,16 +139,16 @@ def render_start_fresh_confirmation() -> bool:
     Returns:
         True if user confirmed, False otherwise
     """
-    st.warning("This will clear all your uploaded files and progress. Are you sure?")
+    st.warning(t("confirm_start_fresh"))
 
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Yes, start fresh", type="primary", key="confirm_fresh"):
+        if st.button(t("yes_start_fresh"), type="primary", key="confirm_fresh"):
             return True
 
     with col2:
-        if st.button("Cancel", key="cancel_fresh"):
+        if st.button(t("cancel_button"), key="cancel_fresh"):
             return False
 
     return False
