@@ -123,46 +123,31 @@ __file__: {Path(__file__)}
 File size: {PAPER_PATH.stat().st_size if PAPER_PATH.exists() else 'N/A'} bytes
         """)
 
-    # Load and display PDF
+    # GitHub raw URL for the PDF
+    GITHUB_PDF_URL = "https://raw.githubusercontent.com/ArthurSrz/intuitiveness/main/scientific_article/Intuitiveness.pdf"
+
+    # Use Google Docs viewer to embed PDF
+    google_viewer_url = f"https://docs.google.com/viewer?url={GITHUB_PDF_URL}&embedded=true"
+
+    pdf_display = f'''
+        <iframe
+            src="{google_viewer_url}"
+            width="100%"
+            height="600px"
+            style="border: 1px solid #e2e8f0; border-radius: 8px;">
+        </iframe>
+    '''
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+    # Fallback download button
     if PAPER_PATH.exists():
-        try:
-            pdf_bytes = PAPER_PATH.read_bytes()
-
-            # Show paper summary
-            st.markdown("""
-            **Abstract:** This paper introduces the concept of *intuitiveness* as a new
-            dimension for evaluating open data quality. We propose a methodology for
-            redesigning datasets through a descent-ascent process across 5 abstraction
-            levels (L4→L0→L3), enabling users to transform raw data into intuitive,
-            question-driven datasets.
-            """)
-
-            st.markdown("---")
-
-            # Download button
-            col1, col2 = st.columns(2)
-            with col1:
-                st.download_button(
-                    label="📥 Download Paper (PDF)",
-                    data=pdf_bytes,
-                    file_name="Intuitiveness_Sarazin_Mourey.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                )
-            with col2:
-                st.link_button(
-                    "🔗 View on Zenodo",
-                    "https://zenodo.org/badge/latestdoi/685140191",
-                    use_container_width=True,
-                )
-
-        except Exception as e:
-            st.error(f"Error loading PDF: {e}")
-            st.exception(e)
-    else:
-        st.error(f"Paper not found. Looking in: {PAPER_PATH}")
-        st.caption(f"Current working directory: {Path.cwd()}")
-        st.caption(f"File location: {Path(__file__).parent}")
+        pdf_bytes = PAPER_PATH.read_bytes()
+        st.download_button(
+            label="📥 Download PDF",
+            data=pdf_bytes,
+            file_name="Intuitiveness_Sarazin_Mourey.pdf",
+            mime="application/pdf",
+        )
 
     st.markdown("")
 
