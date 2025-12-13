@@ -3,16 +3,15 @@ Research Paper Viewer - Dialog Modal
 =====================================
 
 Clean modal dialog showing the Sarazin & Mourey research paper
-using streamlit-extras pdf_viewer.
+using streamlit-pdf-viewer component.
 
 Feature: 007-streamlit-design-makeup
 Reference: Intuitiveness methodology paper
 """
 
 import streamlit as st
-import base64
 from pathlib import Path
-from streamlit_extras.pdf_viewer import pdf_viewer
+from streamlit_pdf_viewer import pdf_viewer
 from intuitiveness.ui.i18n import t
 
 
@@ -38,6 +37,9 @@ def _find_paper_path() -> Path:
     return candidates[0]
 
 PAPER_PATH = _find_paper_path()
+
+# GitHub raw URL for the PDF (used for Cloud deployment)
+GITHUB_PDF_RAW_URL = "https://raw.githubusercontent.com/ArthurSrz/intuitiveness/main/scientific_article/Intuitiveness.pdf"
 
 # Session state keys
 SESSION_KEY_TUTORIAL_COMPLETED = 'tutorial_completed'
@@ -109,34 +111,25 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display PDF using base64 iframe embedding
+    # Display PDF using streamlit-pdf-viewer component
     if PAPER_PATH.exists():
-        pdf_bytes = PAPER_PATH.read_bytes()
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-
-        pdf_display = f'''
-            <iframe
-                src="data:application/pdf;base64,{base64_pdf}"
-                width="100%"
-                height="600px"
-                style="border: 1px solid #e2e8f0; border-radius: 8px;"
-                type="application/pdf">
-            </iframe>
-        '''
-        st.markdown(pdf_display, unsafe_allow_html=True)
+        pdf_viewer(
+            input=PAPER_PATH.read_bytes(),
+            height=550,
+        )
 
         # Download button
         st.download_button(
             label=f"📥 {t('download_pdf')}",
-            data=pdf_bytes,
+            data=PAPER_PATH.read_bytes(),
             file_name="Intuitiveness_Sarazin_Mourey.pdf",
             mime="application/pdf",
         )
     else:
         # Fallback: show link to GitHub
         github_url = "https://github.com/ArthurSrz/intuitiveness/blob/main/scientific_article/Intuitiveness.pdf"
-        st.info(f"📄 [**{t('view_paper')}**]({github_url})")
-        st.caption(t("pdf_not_found"))
+        st.warning(t("pdf_not_found"))
+        st.link_button(f"🔗 {t('view_paper')}", github_url, use_container_width=True)
 
     st.markdown("")
 
