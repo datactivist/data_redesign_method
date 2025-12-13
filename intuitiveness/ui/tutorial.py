@@ -18,8 +18,24 @@ from streamlit_extras.pdf_viewer import pdf_viewer
 # Configuration
 # =============================================================================
 
-# Path to the research paper
-PAPER_PATH = Path(__file__).parent.parent.parent / "scientific_article" / "Intuitiveness.pdf"
+# Path to the research paper - use multiple fallback paths for different environments
+def _find_paper_path() -> Path:
+    """Find paper path across local and Streamlit Cloud environments."""
+    candidates = [
+        # Streamlit Cloud: runs from repo root
+        Path.cwd() / "scientific_article" / "Intuitiveness.pdf",
+        # Local development: relative to this file
+        Path(__file__).parent.parent.parent / "scientific_article" / "Intuitiveness.pdf",
+        # Alternative: absolute path resolution
+        Path(__file__).resolve().parent.parent.parent / "scientific_article" / "Intuitiveness.pdf",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+    # Return first candidate for error message
+    return candidates[0]
+
+PAPER_PATH = _find_paper_path()
 
 # Session state keys
 SESSION_KEY_TUTORIAL_COMPLETED = 'tutorial_completed'
@@ -101,7 +117,9 @@ def show_tutorial_dialog():
         pdf_bytes = PAPER_PATH.read_bytes()
         pdf_viewer(pdf_bytes, height=500)
     else:
-        st.error(f"Paper not found at: {PAPER_PATH}")
+        st.error(f"Paper not found. Looking in: {PAPER_PATH}")
+        st.caption(f"Current working directory: {Path.cwd()}")
+        st.caption(f"File location: {Path(__file__).parent}")
 
     st.markdown("")
 
