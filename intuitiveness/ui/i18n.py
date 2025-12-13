@@ -813,12 +813,13 @@ def render_language_toggle_compact() -> None:
     current_lang = get_language()
 
     selected = st.sidebar.radio(
-        label="",  # Empty label for compact display
+        label="Language",
         options=list(SUPPORTED_LANGUAGES.keys()),
         format_func=lambda x: SUPPORTED_LANGUAGES[x],
         index=list(SUPPORTED_LANGUAGES.keys()).index(current_lang),
         horizontal=True,
         key="language_radio",
+        label_visibility="collapsed",  # Hide label but keep accessible
     )
 
     if selected != current_lang:
