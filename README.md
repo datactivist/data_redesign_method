@@ -3,12 +3,16 @@
 [![DOI](https://zenodo.org/badge/685140191.svg)](https://zenodo.org/badge/latestdoi/685140191)
 
 <p align="center">
-  <img src="images/Intuitive_datasets_design_framework.png" alt="Intuitiveness Framework" width="600"/>
+  <img src="images/gear_cube_logo.svg" alt="Intuitiveness Gear Cube" width="120"/>
 </p>
 
 <p align="center">
   <strong>Transform chaotic datasets into intuitive answers</strong><br>
   <em>The Sarazin & Mourey Data Redesign Method</em>
+</p>
+
+<p align="center">
+  <img src="images/Intuitive_datasets_design_framework.png" alt="Intuitiveness Framework" width="600"/>
 </p>
 
 ---
