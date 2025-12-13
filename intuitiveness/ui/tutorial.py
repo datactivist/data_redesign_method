@@ -127,20 +127,34 @@ File size: {PAPER_PATH.stat().st_size if PAPER_PATH.exists() else 'N/A'} bytes
     if PAPER_PATH.exists():
         try:
             pdf_bytes = PAPER_PATH.read_bytes()
-            st.caption(f"Loaded {len(pdf_bytes)} bytes")
 
-            # Use base64 iframe (more reliable on Streamlit Cloud)
-            b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-            pdf_display = f'''
-                <iframe
-                    src="data:application/pdf;base64,{b64_pdf}"
-                    width="100%"
-                    height="500px"
-                    type="application/pdf"
-                    style="border: 1px solid #e2e8f0; border-radius: 8px;">
-                </iframe>
-            '''
-            st.markdown(pdf_display, unsafe_allow_html=True)
+            # Show paper summary
+            st.markdown("""
+            **Abstract:** This paper introduces the concept of *intuitiveness* as a new
+            dimension for evaluating open data quality. We propose a methodology for
+            redesigning datasets through a descent-ascent process across 5 abstraction
+            levels (L4→L0→L3), enabling users to transform raw data into intuitive,
+            question-driven datasets.
+            """)
+
+            st.markdown("---")
+
+            # Download button
+            col1, col2 = st.columns(2)
+            with col1:
+                st.download_button(
+                    label="📥 Download Paper (PDF)",
+                    data=pdf_bytes,
+                    file_name="Intuitiveness_Sarazin_Mourey.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+            with col2:
+                st.link_button(
+                    "🔗 View on Zenodo",
+                    "https://zenodo.org/badge/latestdoi/685140191",
+                    use_container_width=True,
+                )
 
         except Exception as e:
             st.error(f"Error loading PDF: {e}")
