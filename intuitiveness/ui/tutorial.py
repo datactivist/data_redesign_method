@@ -3,16 +3,15 @@ Research Paper Viewer - Dialog Modal
 =====================================
 
 Clean modal dialog showing the Sarazin & Mourey research paper
-using streamlit-extras pdf_viewer.
+using Mozilla PDF.js viewer (Chrome-compatible).
 
 Feature: 007-streamlit-design-makeup
 Reference: Intuitiveness methodology paper
 """
 
 import streamlit as st
-import base64
 from pathlib import Path
-from streamlit_extras.pdf_viewer import pdf_viewer
+from urllib.parse import quote
 from intuitiveness.ui.i18n import t
 
 
@@ -38,6 +37,9 @@ def _find_paper_path() -> Path:
     return candidates[0]
 
 PAPER_PATH = _find_paper_path()
+
+# GitHub raw URL for the PDF (used for Cloud deployment)
+GITHUB_PDF_RAW_URL = "https://raw.githubusercontent.com/ArthurSrz/intuitiveness/main/scientific_article/Intuitiveness.pdf"
 
 # Session state keys
 SESSION_KEY_TUTORIAL_COMPLETED = 'tutorial_completed'
@@ -109,23 +111,24 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display PDF using base64 iframe embedding
+    # Display PDF using Mozilla PDF.js viewer (Chrome-compatible)
+    # This avoids Chrome blocking base64 data URIs in iframes
+    encoded_url = quote(GITHUB_PDF_RAW_URL, safe='')
+    pdfjs_viewer_url = f"https://mozilla.github.io/pdf.js/web/viewer.html?file={encoded_url}"
+
+    pdf_display = f'''
+        <iframe
+            src="{pdfjs_viewer_url}"
+            width="100%"
+            height="600px"
+            style="border: 1px solid #e2e8f0; border-radius: 8px;"
+        ></iframe>
+    '''
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
+    # Download button (use local file if available, otherwise direct GitHub link)
     if PAPER_PATH.exists():
         pdf_bytes = PAPER_PATH.read_bytes()
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-
-        pdf_display = f'''
-            <iframe
-                src="data:application/pdf;base64,{base64_pdf}"
-                width="100%"
-                height="600px"
-                style="border: 1px solid #e2e8f0; border-radius: 8px;"
-                type="application/pdf">
-            </iframe>
-        '''
-        st.markdown(pdf_display, unsafe_allow_html=True)
-
-        # Download button
         st.download_button(
             label=f"📥 {t('download_pdf')}",
             data=pdf_bytes,
@@ -133,10 +136,8 @@ def show_tutorial_dialog():
             mime="application/pdf",
         )
     else:
-        # Fallback: show link to GitHub
-        github_url = "https://github.com/ArthurSrz/intuitiveness/blob/main/scientific_article/Intuitiveness.pdf"
-        st.info(f"📄 [**{t('view_paper')}**]({github_url})")
-        st.caption(t("pdf_not_found"))
+        # Fallback: direct link to GitHub
+        st.markdown(f"[📥 {t('download_pdf')}]({GITHUB_PDF_RAW_URL})")
 
     st.markdown("")
 
