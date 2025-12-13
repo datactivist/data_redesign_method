@@ -1,4 +1,6 @@
-uv
+# Install the local package
+-e .
+
 neo4j>=5.0.0
 networkx
 pandas
