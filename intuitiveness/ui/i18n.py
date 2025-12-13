@@ -2249,23 +2249,31 @@ def render_language_toggle() -> Optional[str]:
     return selected_lang
 
 
+def _on_language_change():
+    """Callback when language is changed via radio button."""
+    new_lang = st.session_state.get("language_radio")
+    if new_lang:
+        st.session_state[SESSION_KEY_LANGUAGE] = new_lang
+
+
 def render_language_toggle_compact() -> None:
     """
     Render a compact language toggle using radio buttons.
     More visible than dropdown, good for sidebar header.
     """
-    current_lang = get_language()
+    # Initialize language in session state if not present
+    if SESSION_KEY_LANGUAGE not in st.session_state:
+        st.session_state[SESSION_KEY_LANGUAGE] = DEFAULT_LANGUAGE
 
-    selected = st.sidebar.radio(
-        label="Language",
-        options=list(SUPPORTED_LANGUAGES.keys()),
+    current_lang = st.session_state[SESSION_KEY_LANGUAGE]
+    lang_keys = list(SUPPORTED_LANGUAGES.keys())
+
+    st.sidebar.radio(
+        label="🌐",
+        options=lang_keys,
         format_func=lambda x: SUPPORTED_LANGUAGES[x],
-        index=list(SUPPORTED_LANGUAGES.keys()).index(current_lang),
+        index=lang_keys.index(current_lang) if current_lang in lang_keys else 0,
         horizontal=True,
         key="language_radio",
-        label_visibility="collapsed",  # Hide label but keep accessible
+        on_change=_on_language_change,
     )
-
-    if selected != current_lang:
-        set_language(selected)
-        st.rerun()

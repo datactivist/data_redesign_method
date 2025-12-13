@@ -85,7 +85,7 @@ def should_show_tutorial() -> bool:
 # Main Paper Dialog
 # =============================================================================
 
-@st.dialog(t("tutorial_modal_title"), width="large")
+@st.dialog("The Intuitiveness Method", width="large")
 def show_tutorial_dialog():
     """
     Display the research paper in a modal dialog.
