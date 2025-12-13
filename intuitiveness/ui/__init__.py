@@ -111,6 +111,28 @@ from .layout import (
     two_column_layout,
 )
 
+# Data.gouv.fr search interface (008-datagouv-search)
+from .datagouv_search import (
+    render_search_interface,
+    render_search_bar,
+    render_dataset_grid,
+    render_resource_selector,
+    render_basket_sidebar,
+)
+
+# Sarazin & Mourey tutorial (007-streamlit-design-makeup, Phase 9)
+from .tutorial import (
+    render_tutorial,
+    render_tutorial_replay_button,
+    is_tutorial_completed,
+    mark_tutorial_completed,
+    skip_tutorial,
+    reset_tutorial,
+    SESSION_KEY_TUTORIAL_COMPLETED,
+    SESSION_KEY_TUTORIAL_STEP,
+    TUTORIAL_STEPS,
+)
+
 # Ascent UI forms (004-ascent-precision)
 from .ascent_forms import (
     # Form renderers
@@ -243,4 +265,20 @@ __all__ = [
     'separator',
     'spacer',
     'two_column_layout',
+    # Data.gouv.fr search interface (008-datagouv-search)
+    'render_search_interface',
+    'render_search_bar',
+    'render_dataset_grid',
+    'render_resource_selector',
+    'render_basket_sidebar',
+    # Sarazin & Mourey tutorial (007-streamlit-design-makeup, Phase 9)
+    'render_tutorial',
+    'render_tutorial_replay_button',
+    'is_tutorial_completed',
+    'mark_tutorial_completed',
+    'skip_tutorial',
+    'reset_tutorial',
+    'SESSION_KEY_TUTORIAL_COMPLETED',
+    'SESSION_KEY_TUTORIAL_STEP',
+    'TUTORIAL_STEPS',
 ]

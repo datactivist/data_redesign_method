@@ -79,6 +79,14 @@ from intuitiveness.ui import (
     card,
     separator,
     spacer,
+    # Data.gouv.fr search interface (008-datagouv-search)
+    render_search_interface,
+    render_basket_sidebar,
+    # Sarazin & Mourey tutorial (007-streamlit-design-makeup, Phase 9)
+    render_tutorial,
+    render_tutorial_replay_button,
+    is_tutorial_completed,
+    mark_tutorial_completed,
 )
 from intuitiveness.persistence import (
     SessionStore,
@@ -279,6 +287,203 @@ def init_session_state():
     # Column mapping for graph building
     if 'column_mapping' not in st.session_state:
         st.session_state.column_mapping = {}
+
+
+def _get_sidebar_branding_html() -> str:
+    """
+    Generate sidebar branding with animated mini gear cube.
+
+    Returns HTML with:
+    - Animated gear cube (compact version)
+    - "Intuitiveness" brand name
+    - "The next stage of open data" tagline
+    """
+    return """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+    }
+
+    .mini-cube-container {
+        perspective: 200px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .mini-cube {
+        width: 40px;
+        height: 40px;
+        transform-style: preserve-3d;
+        animation: mini-shuffle 12s ease-in-out infinite;
+    }
+
+    @keyframes mini-shuffle {
+        0%   { transform: rotateX(-15deg) rotateY(0deg); }
+        15%  { transform: rotateX(20deg) rotateY(90deg) rotateZ(-5deg); }
+        30%  { transform: rotateX(-20deg) rotateY(180deg) rotateZ(5deg); }
+        45%  { transform: rotateX(15deg) rotateY(270deg); }
+        60%  { transform: rotateX(-15deg) rotateY(360deg); }
+        100% { transform: rotateX(-15deg) rotateY(360deg); }
+    }
+
+    .mini-face {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        padding: 2px;
+        background: rgba(0, 47, 167, 0.03);
+        border-radius: 4px;
+    }
+
+    .mini-face.front  { transform: translateZ(20px); }
+    .mini-face.back   { transform: rotateY(180deg) translateZ(20px); }
+    .mini-face.right  { transform: rotateY(90deg) translateZ(20px); }
+    .mini-face.left   { transform: rotateY(-90deg) translateZ(20px); }
+    .mini-face.top    { transform: rotateX(90deg) translateZ(20px); }
+    .mini-face.bottom { transform: rotateX(-90deg) translateZ(20px); }
+
+    .mini-gear {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        position: relative;
+    }
+
+    .mini-gear::after {
+        content: '';
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: inherit;
+        border-radius: 50%;
+        clip-path: polygon(
+            50% 0%, 65% 15%, 85% 15%, 85% 35%, 100% 50%,
+            85% 65%, 85% 85%, 65% 85%, 50% 100%,
+            35% 85%, 15% 85%, 15% 65%, 0% 50%,
+            15% 35%, 15% 15%, 35% 15%
+        );
+    }
+
+    .mini-gear.l0 { background: #002fa7; }
+    .mini-gear.l1 { background: #0041d1; }
+    .mini-gear.l2 { background: #3b82f6; }
+    .mini-gear.l3 { background: #60a5fa; }
+    .mini-gear.l4 { background: #93c5fd; }
+
+    .mini-gear.spin-cw { animation: mini-spin-cw 8s linear infinite; }
+    .mini-gear.spin-ccw { animation: mini-spin-ccw 8s linear infinite; }
+
+    @keyframes mini-spin-cw { to { transform: rotate(360deg); } }
+    @keyframes mini-spin-ccw { to { transform: rotate(-360deg); } }
+
+    .brand-text {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .brand-name {
+        font-family: 'Outfit', sans-serif;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #002fa7;
+        letter-spacing: -0.02em;
+        line-height: 1.1;
+    }
+
+    .brand-tagline {
+        font-family: 'Outfit', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 400;
+        color: #64748b;
+        letter-spacing: 0.01em;
+    }
+    </style>
+
+    <div class="sidebar-brand">
+        <div class="mini-cube-container">
+            <div class="mini-cube">
+                <div class="mini-face front">
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l0 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                </div>
+                <div class="mini-face back">
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l1 spin-ccw"></div>
+                    <div class="mini-gear l0 spin-cw"></div>
+                    <div class="mini-gear l1 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                </div>
+                <div class="mini-face right">
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l1 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                </div>
+                <div class="mini-face left">
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l1 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l3 spin-cw"></div>
+                    <div class="mini-gear l2 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                </div>
+                <div class="mini-face top">
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l4 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l2 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l2 spin-cw"></div>
+                    <div class="mini-gear l1 spin-ccw"></div>
+                    <div class="mini-gear l2 spin-cw"></div>
+                </div>
+                <div class="mini-face bottom">
+                    <div class="mini-gear l2 spin-cw"></div>
+                    <div class="mini-gear l1 spin-ccw"></div>
+                    <div class="mini-gear l2 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l2 spin-cw"></div>
+                    <div class="mini-gear l3 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                    <div class="mini-gear l4 spin-ccw"></div>
+                    <div class="mini-gear l4 spin-cw"></div>
+                </div>
+            </div>
+        </div>
+        <div class="brand-text">
+            <span class="brand-name">Intuitiveness</span>
+            <span class="brand-tagline">The next stage of open data</span>
+        </div>
+    </div>
+    """
 
 
 def reset_workflow():
@@ -855,156 +1060,151 @@ def render_methodology_intro():
     st.info("**Ready to begin?** Upload your CSV files above to start the descent-ascent cycle.")
 
 
-def render_upload_step():
-    """Step 0: Upload raw data files."""
+def render_upload_step(skip_header: bool = False):
+    """Step 0: Search and load data from data.gouv.fr."""
     step = STEPS[0]
-    render_step_header(step)
+    if not skip_header:
+        render_step_header(step)
 
-    st.info("📁 Upload one or more CSV files to begin the redesign process.")
+    # Check if data is already loaded (from search)
+    raw_data = st.session_state.raw_data
+    if raw_data:
+        # Use standardized L4 file list display (003-level-dataviz-display FR-001, FR-002)
+        files_data = [
+            {
+                "name": name,
+                "dataframe": df,
+                "rows": df.shape[0],
+                "columns": df.shape[1]
+            }
+            for name, df in raw_data.items()
+        ]
+        render_l4_file_list(files_data, show_preview=True, max_preview_rows=5)
 
-    uploaded_files = st.file_uploader(
-        "Choose CSV files",
-        type=['csv'],
-        accept_multiple_files=True,
-        help="Upload the raw data files you want to redesign"
-    )
+        # ========== AI-POWERED CONNECTION WIZARD (shown immediately after upload) ==========
+        st.markdown("---")
+        st.subheader("🔮 Connect Your Data")
+        st.markdown("I'll analyze your files and suggest how to connect them.")
 
-    if uploaded_files:
-        raw_data = {}
-        for file in uploaded_files:
-            df, info = smart_load_csv(file)
-            if df is not None:
-                raw_data[file.name] = df
-                st.success(f"✅ Loaded: {file.name} ({df.shape[0]} rows, {df.shape[1]} cols) — {info}")
-            else:
-                st.error(f"❌ Error loading {file.name}: {info}")
+        # Initialize discovery results if not exists
+        if SESSION_KEY_DISCOVERY_RESULTS not in st.session_state:
+            st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = None
 
-        if raw_data:
-            st.session_state.raw_data = raw_data
-            st.session_state.datasets['l4'] = Level4Dataset(raw_data)
+        # Run discovery if not done yet
+        if st.session_state[SESSION_KEY_DISCOVERY_RESULTS] is None:
+            with st.spinner("Analyzing your files to find connections..."):
+                try:
+                    discovery_result = run_discovery(raw_data)
+                    st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = discovery_result
+                    st.success(f"Found {len(discovery_result.entity_suggestions)} data types "
+                              f"and {len(discovery_result.relationship_suggestions)} potential connections "
+                              f"in {discovery_result.analysis_time_ms:.0f}ms")
+                except Exception as e:
+                    st.error(f"Error analyzing files: {e}")
+                    st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = DiscoveryResult()
 
-            # Use standardized L4 file list display (003-level-dataviz-display FR-001, FR-002)
-            files_data = [
-                {
-                    "name": name,
-                    "dataframe": df,
-                    "rows": df.shape[0],
-                    "columns": df.shape[1]
-                }
-                for name, df in raw_data.items()
-            ]
-            render_l4_file_list(files_data, show_preview=True, max_preview_rows=5)
+        # Get discovery results
+        discovery_result = st.session_state[SESSION_KEY_DISCOVERY_RESULTS]
 
-            # ========== AI-POWERED CONNECTION WIZARD (shown immediately after upload) ==========
-            st.markdown("---")
-            st.subheader("🔮 Connect Your Data")
-            st.markdown("I'll analyze your files and suggest how to connect them.")
+        if discovery_result and discovery_result.entity_suggestions:
+            # Get current wizard step
+            wizard_step = _get_wizard_step()
 
-            # Initialize discovery results if not exists
-            if SESSION_KEY_DISCOVERY_RESULTS not in st.session_state:
-                st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = None
-
-            # Run discovery if not done yet
-            if st.session_state[SESSION_KEY_DISCOVERY_RESULTS] is None:
-                with st.spinner("Analyzing your files to find connections..."):
-                    try:
-                        discovery_result = run_discovery(raw_data)
-                        st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = discovery_result
-                        st.success(f"Found {len(discovery_result.entity_suggestions)} data types "
-                                  f"and {len(discovery_result.relationship_suggestions)} potential connections "
-                                  f"in {discovery_result.analysis_time_ms:.0f}ms")
-                    except Exception as e:
-                        st.error(f"Error analyzing files: {e}")
-                        st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = DiscoveryResult()
-
-            # Get discovery results
-            discovery_result = st.session_state[SESSION_KEY_DISCOVERY_RESULTS]
-
-            if discovery_result and discovery_result.entity_suggestions:
-                # Get current wizard step
-                wizard_step = _get_wizard_step()
-
-                # Render appropriate wizard step
-                if wizard_step == 1:
-                    if render_wizard_step_1_columns(
-                        raw_data,
-                        key_prefix="upload_wizard_s1"
-                    ):
-                        _set_wizard_step(2)
-                        st.rerun()
-
-                elif wizard_step == 2:
-                    if render_wizard_step_2_connections(
-                        raw_data,
-                        selected_columns_key="upload_wizard_s1_selected_columns",
-                        key_prefix="upload_wizard_s2"
-                    ):
-                        _set_wizard_step(3)
-                        st.rerun()
-
-                elif wizard_step == 3:
-                    joined_df = render_wizard_step_3_confirm(
-                        raw_data,
-                        key_prefix="upload_wizard_s3"
-                    )
-                    if joined_df is not None:
-                        # Store the joined L3 dataset
-                        st.session_state.joined_l3_dataset = joined_df
-
-                        # Create L3 dataset for Step 3 (Define Categories)
-                        # L3 accepts DataFrame directly - no need to convert to graph
-                        # (Converting rows to graph nodes caused OOM on large datasets)
-                        st.session_state.datasets['l3'] = Level3Dataset(joined_df)
-
-                        # Create entity/relationship mappings from the joined table
-                        entity_mapping = {}
-                        relationship_mapping = {}
-
-                        # Create a single entity from the joined table
-                        from intuitiveness.interactive import DataModelNode, DataModelRelationship
-                        nodes = []
-                        relationships = []
-
-                        # The joined table becomes a single unified entity
-                        nodes.append(DataModelNode(
-                            label="JoinedData",
-                            key_property=joined_df.columns[0],
-                            properties=list(joined_df.columns)
-                        ))
-
-                        st.session_state.entity_mapping = entity_mapping
-                        st.session_state.relationship_mapping = relationship_mapping
-
-                        # Store the data model
-                        st.session_state.data_model = Neo4jDataModel(
-                            nodes=nodes,
-                            relationships=relationships
-                        )
-
-                        st.success("Configuration complete! Moving to next step...")
-                        st.session_state.current_step = 2  # Skip to step 2 (graph building)
-                        st.rerun()
-
-                # Option to reset wizard
-                with st.expander("🔄 Start Over"):
-                    if st.button("Reset and Re-analyze", key="upload_reset_wizard"):
-                        st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = None
-                        _set_wizard_step(1)
-                        keys_to_clear = [k for k in st.session_state.keys()
-                                        if k.startswith('upload_wizard_s')]
-                        for k in keys_to_clear:
-                            del st.session_state[k]
-                        st.rerun()
-
-            else:
-                # Fallback: No entities found, continue with manual mode
-                st.warning("Could not automatically analyze your files. Please continue manually.")
-                if st.button("Continue →", type="primary"):
-                    st.session_state.current_step = 1
+            # Render appropriate wizard step
+            if wizard_step == 1:
+                if render_wizard_step_1_columns(
+                    raw_data,
+                    key_prefix="upload_wizard_s1"
+                ):
+                    _set_wizard_step(2)
                     st.rerun()
+
+            elif wizard_step == 2:
+                if render_wizard_step_2_connections(
+                    raw_data,
+                    selected_columns_key="upload_wizard_s1_selected_columns",
+                    key_prefix="upload_wizard_s2"
+                ):
+                    _set_wizard_step(3)
+                    st.rerun()
+
+            elif wizard_step == 3:
+                joined_df = render_wizard_step_3_confirm(
+                    raw_data,
+                    key_prefix="upload_wizard_s3"
+                )
+                if joined_df is not None:
+                    # Store the joined L3 dataset
+                    st.session_state.joined_l3_dataset = joined_df
+
+                    # Create L3 dataset for Step 3 (Define Categories)
+                    # L3 accepts DataFrame directly - no need to convert to graph
+                    # (Converting rows to graph nodes caused OOM on large datasets)
+                    st.session_state.datasets['l3'] = Level3Dataset(joined_df)
+
+                    # Create entity/relationship mappings from the joined table
+                    entity_mapping = {}
+                    relationship_mapping = {}
+
+                    # Create a single entity from the joined table
+                    from intuitiveness.interactive import DataModelNode, DataModelRelationship
+                    nodes = []
+                    relationships = []
+
+                    # The joined table becomes a single unified entity
+                    nodes.append(DataModelNode(
+                        label="JoinedData",
+                        key_property=joined_df.columns[0],
+                        properties=list(joined_df.columns)
+                    ))
+
+                    st.session_state.entity_mapping = entity_mapping
+                    st.session_state.relationship_mapping = relationship_mapping
+
+                    # Store the data model
+                    st.session_state.data_model = Neo4jDataModel(
+                        nodes=nodes,
+                        relationships=relationships
+                    )
+
+                    st.success("Configuration complete! Moving to next step...")
+                    st.session_state.current_step = 2  # Skip to step 2 (graph building)
+                    st.rerun()
+
+            # Option to reset wizard
+            with st.expander("🔄 Start Over"):
+                if st.button("Reset and Re-analyze", key="upload_reset_wizard"):
+                    st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = None
+                    _set_wizard_step(1)
+                    keys_to_clear = [k for k in st.session_state.keys()
+                                    if k.startswith('upload_wizard_s')]
+                    for k in keys_to_clear:
+                        del st.session_state[k]
+                    st.rerun()
+
+        else:
+            # Fallback: No entities found, continue with manual mode
+            st.warning("Could not automatically analyze your files. Please continue manually.")
+            if st.button("Continue →", type="primary"):
+                st.session_state.current_step = 1
+                st.rerun()
     else:
         # Welcome section when no files are uploaded
-        render_methodology_intro()
+        # Feature 008-datagouv-search: Show search-first interface
+
+        # Initialize loaded datasets tracking
+        if 'datagouv_loaded_datasets' not in st.session_state:
+            st.session_state.datagouv_loaded_datasets = {}
+
+        # Clean search interface only - basket is in sidebar
+        loaded_df = render_search_interface()
+
+        if loaded_df is not None:
+            # Get the dataset name from session state or generate one
+            dataset_name = st.session_state.get('datagouv_last_dataset_name', f"dataset_{len(st.session_state.datagouv_loaded_datasets) + 1}.csv")
+            st.session_state.datagouv_loaded_datasets[dataset_name] = loaded_df
+            st.session_state.pop('datagouv_last_dataset_name', None)
+            st.rerun()
 
 
 def render_entities_step():
@@ -4530,104 +4730,150 @@ def main():
                     # User hasn't clicked yet - stop here and wait
                     st.stop()
 
-    # Sidebar
-    with st.sidebar:
-        # Logo and branding (007-streamlit-design-makeup: Visual Identity)
-        logo_path = ASSETS_DIR / "logo.svg"
-        if logo_path.exists():
-            import base64
-            svg_content = logo_path.read_text()
-            b64 = base64.b64encode(svg_content.encode()).decode()
-            st.markdown(
-                f'<div style="width: 100%; padding: 0.5rem 0;"><img src="data:image/svg+xml;base64,{b64}" style="width: 100%;" /></div>',
-                unsafe_allow_html=True
-            )
-        st.markdown("---")
+    # Check if we're on the pure landing page (no data, no search performed)
+    # In this state, we hide EVERYTHING except the search bar
+    is_pure_landing = (
+        st.session_state.nav_mode == 'guided' and
+        st.session_state.current_step == 0 and
+        st.session_state.raw_data is None and
+        not st.session_state.get('datagouv_loaded_datasets') and
+        not st.session_state.get('datagouv_results')  # No search results yet
+    )
 
-        # Language toggle (006-playwright-mcp-e2e: Bilingual support)
-        render_language_toggle_compact()
-        st.divider()
+    # Hide sidebar completely on pure landing page
+    if is_pure_landing:
+        st.markdown("""
+        <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        .stApp > header { display: none !important; }
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        # Sidebar - only show after user has interacted
+        with st.sidebar:
+            # Animated gear cube logo + branding
+            st.markdown(_get_sidebar_branding_html(), unsafe_allow_html=True)
+            st.markdown("---")
 
-        # Mode toggle - Constitution v1.2.0: Use domain-friendly labels
-        st.markdown(f"### {t('exploration_mode')}")
-        mode = st.radio(
-            t('select_mode'),
-            options=['guided', 'free'],
-            format_func=lambda x: t('step_by_step') if x == 'guided' else t('free_exploration'),
-            index=0 if st.session_state.nav_mode == 'guided' else 1,
-            key='mode_selector',
-            help=t('step_by_step_help')
-        )
+            # Language toggle (006-playwright-mcp-e2e: Bilingual support)
+            render_language_toggle_compact()
+            st.divider()
 
-        # Sync radio with nav_mode, but skip if in ascent mode (has loaded_session_graph)
-        # During ascent, we force free mode regardless of radio selection
-        if mode != st.session_state.nav_mode and not st.session_state.get('loaded_session_graph'):
-            st.session_state.nav_mode = mode
-            st.rerun()
+            # Dataset basket in sidebar (008-datagouv-search)
+            if render_basket_sidebar():
+                # User clicked "Continue" - proceed with loaded datasets
+                raw_data = st.session_state.datagouv_loaded_datasets.copy()
+                st.session_state.raw_data = raw_data
+                st.session_state.datasets['l4'] = Level4Dataset(raw_data)
+                st.session_state.datagouv_loaded_datasets = {}
 
-        st.divider()
-
-        if st.session_state.nav_mode == 'guided':
-            # Guided mode sidebar - simplified progress indicator
-            st.markdown(f"### {t('current_progress')}")
-            current_step = STEPS[st.session_state.current_step]
-            st.info(f"**{current_step['level']}**: {current_step['title']}")
-        else:
-            # Free exploration mode - render exploration tree
-            if st.session_state.nav_session:
-                render_free_navigation_sidebar()
-            else:
-                st.info(t('start_exploring'))
-
-        st.divider()
-        if st.button(f"🔄 {t('reset_workflow')}"):
-            reset_workflow()
-            st.rerun()
-
-        # Session persistence buttons (005-session-persistence)
-        st.markdown(f"### {t('sidebar_session')}")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(f"💾 {t('save_button')}", help=t('save_help')):
-                try:
-                    result = store.save(force=True)
-                    if result.success:
-                        st.success(t('saved_success'))
-                    else:
-                        st.warning(t('save_too_large'))
-                except Exception as e:
-                    st.error(t('save_failed', error=str(e)))
-        with col2:
-            if st.button(f"🗑️ {t('clear_button')}", help=t('clear_help')):
-                store.clear()
-                reset_workflow()
-                st.session_state.session_recovery_handled = True
+                if not is_tutorial_completed():
+                    st.session_state.show_tutorial = True
+                else:
+                    st.session_state.current_step = 1
                 st.rerun()
+
+            # Mode toggle - Constitution v1.2.0: Use domain-friendly labels
+            st.markdown(f"### {t('exploration_mode')}")
+            mode = st.radio(
+                t('select_mode'),
+                options=['guided', 'free'],
+                format_func=lambda x: t('step_by_step') if x == 'guided' else t('free_exploration'),
+                index=0 if st.session_state.nav_mode == 'guided' else 1,
+                key='mode_selector',
+                help=t('step_by_step_help')
+            )
+
+            # Sync radio with nav_mode, but skip if in ascent mode (has loaded_session_graph)
+            # During ascent, we force free mode regardless of radio selection
+            if mode != st.session_state.nav_mode and not st.session_state.get('loaded_session_graph'):
+                st.session_state.nav_mode = mode
+                st.rerun()
+
+            st.divider()
+
+            # Free exploration mode - render exploration tree (only when active)
+            if st.session_state.nav_mode == 'free' and st.session_state.nav_session:
+                render_free_navigation_sidebar()
+                st.divider()
+            if st.button(f"🔄 {t('reset_workflow')}"):
+                reset_workflow()
+                st.rerun()
+
+            # Tutorial replay button (007-streamlit-design-makeup, Phase 9)
+            if is_tutorial_completed() and st.session_state.raw_data is not None:
+                render_tutorial_replay_button()
+
+            # Session persistence buttons (005-session-persistence)
+            st.markdown(f"### {t('sidebar_session')}")
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button(f"💾 {t('save_button')}", help=t('save_help')):
+                    try:
+                        result = store.save(force=True)
+                        if result.success:
+                            st.success(t('saved_success'))
+                        else:
+                            st.warning(t('save_too_large'))
+                    except Exception as e:
+                        st.error(t('save_failed', error=str(e)))
+            with col2:
+                if st.button(f"🗑️ {t('clear_button')}", help=t('clear_help')):
+                    store.clear()
+                    reset_workflow()
+                    st.session_state.session_recovery_handled = True
+                    st.rerun()
 
     # Main content
     if st.session_state.nav_mode == 'guided':
-        # Guided workflow - SaaS-style header (007-streamlit-design-makeup)
-        render_page_header(
-            title="Data Redesign Method",
-            subtitle=t('transform_data'),
-            show_accent=True
+        # Check if we're in the search/selection flow (hide header throughout)
+        # This includes: landing page, search results, and basket selection
+        is_in_search_flow = (
+            st.session_state.current_step == 0 and
+            st.session_state.raw_data is None
+        )
+        # Keep old name for backwards compatibility with render_upload_step
+        is_search_landing = is_in_search_flow
+
+        # Check if we're showing the tutorial (after data loaded, before workflow)
+        is_tutorial_view = (
+            st.session_state.get('show_tutorial', False) and
+            not is_tutorial_completed()
         )
 
-        # Render current step
-        step_id = STEPS[st.session_state.current_step]['id']
+        # Only show main header if NOT on search landing and NOT showing tutorial
+        if not is_search_landing and not is_tutorial_view:
+            # Guided workflow - SaaS-style header (007-streamlit-design-makeup)
+            render_page_header(
+                title="Data Redesign Method",
+                subtitle=t('transform_data'),
+                show_accent=True
+            )
 
-        if step_id == "upload":
-            render_upload_step()
-        elif step_id == "entities":
-            render_entities_step()
-        elif step_id == "domains":
-            render_domains_step()
-        elif step_id == "features":
-            render_features_step()
-        elif step_id == "aggregation":
-            render_aggregation_step()
-        elif step_id == "results":
-            render_results_step()
+        # Tutorial view - Sarazin & Mourey method (007-streamlit-design-makeup, Phase 9)
+        if is_tutorial_view:
+            def on_tutorial_complete():
+                st.session_state.show_tutorial = False
+                st.session_state.current_step = 1  # Go to entities step
+
+            render_tutorial(on_complete=on_tutorial_complete)
+
+        # Render current step (only if not in tutorial)
+        elif not is_tutorial_view:
+            step_id = STEPS[st.session_state.current_step]['id']
+
+            if step_id == "upload":
+                render_upload_step(skip_header=is_search_landing)
+            elif step_id == "entities":
+                render_entities_step()
+            elif step_id == "domains":
+                render_domains_step()
+            elif step_id == "features":
+                render_features_step()
+            elif step_id == "aggregation":
+                render_aggregation_step()
+            elif step_id == "results":
+                render_results_step()
 
     else:
         # Free Exploration Mode - SaaS-style header (007-streamlit-design-makeup)

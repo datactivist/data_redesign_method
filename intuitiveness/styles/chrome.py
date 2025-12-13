@@ -7,66 +7,67 @@ Goal: Make the app look like a custom web application, not a Streamlit app.
 
 HIDE_CHROME_CSS = """
 /* ==============================================
-   STREAMLIT CHROME HIDING - Deep Customization
-   Following Gael Penessot's DataGyver philosophy
+   STREAMLIT CHROME HIDING - COMPLETE REMOVAL
+   Goal: Zero Streamlit appearance, pure custom app
    ============================================== */
 
-/* Hide main menu (hamburger) */
-#MainMenu {
-    visibility: hidden !important;
-}
-
-/* Hide footer completely */
-footer {
-    visibility: hidden !important;
-    height: 0 !important;
-}
-
-/* Hide header/toolbar area */
-header {
-    visibility: hidden !important;
-}
-
-/* Hide "Made with Streamlit" badge - multiple selectors for reliability */
-.viewerBadge_container__r5tak,
-.viewerBadge_link__qRIco,
-[data-testid="stStreamlitBadge"],
-.stAppViewBlockContainer [data-testid="stDecoration"] {
-    display: none !important;
-}
-
-/* Hide deploy button */
+/* CRITICAL: Hide ALL header elements completely */
+#MainMenu,
+header,
+.stApp > header,
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+.stToolbar,
 .stDeployButton,
 [data-testid="stDeployButton"],
 button[data-testid="baseButton-header"] {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
 }
 
-/* Hide toolbar completely */
-[data-testid="stToolbar"],
-.stToolbar {
+/* Hide footer completely - no "Made with Streamlit" */
+footer,
+.stApp > footer,
+[data-testid="stFooter"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+
+/* Hide ALL badges and branding */
+.viewerBadge_container__r5tak,
+.viewerBadge_link__qRIco,
+[data-testid="stStreamlitBadge"],
+.stAppViewBlockContainer [data-testid="stDecoration"],
+[data-testid="stDecoration"] {
     display: none !important;
 }
 
-/* Hide sidebar collapse/expand control for cleaner look */
+/* Hide sidebar collapse control */
 [data-testid="collapsedControl"] {
     display: none !important;
 }
 
-/* Hide fullscreen buttons on dataframes and charts */
+/* Hide fullscreen buttons */
 button[title="View fullscreen"],
 [data-testid="StyledFullScreenButton"] {
     display: none !important;
 }
 
-/* Hide status widget (running indicator in corner) */
+/* Hide running indicator */
 [data-testid="stStatusWidget"],
 .stStatusWidget {
     display: none !important;
 }
 
-/* Hide decoration line at top of app */
-[data-testid="stDecoration"] {
+/* Hide page title that appears during rerun */
+.stApp [data-testid="stAppViewContainer"] > div:first-child > div:first-child {
     display: none !important;
 }
 
