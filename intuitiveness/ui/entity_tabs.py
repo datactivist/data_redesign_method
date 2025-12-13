@@ -13,6 +13,8 @@ import streamlit as st
 import pandas as pd
 import networkx as nx
 
+from intuitiveness.ui.i18n import t
+
 
 @dataclass
 class EntityTabData:
@@ -313,13 +315,12 @@ def render_entity_relationship_tabs(
         # Only show summary if we have relationships or multiple entity types
         if total_relationships > 0 or len(entity_tabs) > 1:
             st.markdown(
-                f"**Found {total_entities:,} items across {len(entity_tabs)} categories, "
-                f"with {total_relationships:,} connections**"
+                f"**{t('found_items_connections', items=total_entities, categories=len(entity_tabs), connections=total_relationships)}**"
             )
 
     # Handle empty state (no connections)
     if not entity_tabs and not relationship_tabs:
-        st.info("No items or connections found in your data.")
+        st.info(t("no_items_connections"))
         return None
 
     # Create combined tables
@@ -369,7 +370,7 @@ def render_entity_relationship_tabs(
             tab_data_list.append(("relationship", rel_tab))
 
     if not tab_labels:
-        st.info("No data to display.")
+        st.info(t("no_data_to_display"))
         return None
 
     # Create tabs
@@ -379,34 +380,34 @@ def render_entity_relationship_tabs(
     for i, (tab_type, tab_data) in enumerate(tab_data_list):
         with tabs[i]:
             if tab_type == "all_combined":
-                st.markdown(f"**{tab_data.count:,} items with connections shown**")
-                st.caption("Each record shows what it connects to")
+                st.markdown(f"**{t('items_with_connections', count=tab_data.count)}**")
+                st.caption(t("each_record_shows"))
                 df = tab_data.to_dataframe()
             elif tab_type == "combined_entities":
-                st.markdown(f"**{tab_data.count:,} total items across all categories**")
+                st.markdown(f"**{t('total_items_categories', count=tab_data.count)}**")
                 df = tab_data.to_dataframe()
             elif tab_type == "combined_relationships":
-                st.markdown(f"**{tab_data.count:,} total connections across all types**")
+                st.markdown(f"**{t('total_connections_types', count=tab_data.count)}**")
                 df = tab_data.to_dataframe()
             elif tab_type == "entity":
-                st.markdown(f"**{tab_data.entity_count:,} {tab_data.entity_type} items**")
+                st.markdown(f"**{t('entity_items_count', count=tab_data.entity_count, entity_type=tab_data.entity_type)}**")
                 df = tab_data.to_dataframe()
             elif tab_type == "relationship":
-                st.markdown(f"**{tab_data.relationship_count:,} {tab_data.relationship_type} connections**")
+                st.markdown(f"**{t('relationship_connections_count', count=tab_data.relationship_count, rel_type=tab_data.relationship_type)}**")
                 df = tab_data.to_dataframe()
 
             display_df = df.head(max_rows) if len(df) > max_rows else df
             st.dataframe(display_df, use_container_width=True, hide_index=True)
 
             if len(df) > max_rows:
-                st.caption(f"Showing first {max_rows} of {len(df):,} items")
+                st.caption(t("showing_first_of", first=max_rows, total=len(df)))
 
             # Selection button for categorization
             if enable_selection:
                 table_name = _get_table_name(tab_type, tab_data)
                 btn_key = f"{selection_key_prefix}_{tab_type}_{i}"
 
-                if st.button(f"Use this data", key=btn_key, type="secondary"):
+                if st.button(t("use_this_data"), key=btn_key, type="secondary"):
                     selected_table = {
                         "table_type": tab_type,
                         "table_name": table_name,
@@ -420,15 +421,15 @@ def _get_table_name(tab_type: str, tab_data: Any) -> str:
     """Get a human-readable name for the table."""
     # Constitution v1.2.0: Use domain-friendly labels
     if tab_type == "all_combined":
-        return "All (Items + Connections)"
+        return t("all_items_connections")
     elif tab_type == "combined_entities":
-        return "All Items"
+        return t("all_items_label")
     elif tab_type == "combined_relationships":
-        return "All Connections"
+        return t("all_connections_label")
     elif tab_type == "entity":
-        return f"{tab_data.entity_type} items"
+        return f"{tab_data.entity_type} {t('items_suffix')}"
     elif tab_type == "relationship":
-        return f"{tab_data.relationship_key} connections"
+        return f"{tab_data.relationship_key} {t('connections_suffix')}"
     return "Unknown"
 
 

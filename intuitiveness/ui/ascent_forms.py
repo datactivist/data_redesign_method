@@ -17,6 +17,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import streamlit as st
 import pandas as pd
 
+from intuitiveness.ui.i18n import t
+
 
 # =============================================================================
 # Session State Keys (T002)
@@ -138,14 +140,14 @@ def _render_domain_categorization_inputs(
     """
     # Category input field (T005, FR-005)
     if show_help:
-        st.markdown("**Enter categories (comma-separated):**")
+        st.markdown(f"**{t('enter_categories_label')}**")
 
     stored_domains = st.session_state.get(f'{key_prefix}_domains', default_domains)
     domains_input = st.text_input(
-        "Categories:",
+        t("categories_label"),
         value=stored_domains,
         key=f"{key_prefix}_domains_input",
-        help="Enter categories separated by commas (e.g., 'Sales, Marketing, Engineering')"
+        help=t("categories_help")
     )
     st.session_state[f'{key_prefix}_domains'] = domains_input
 
@@ -154,24 +156,24 @@ def _render_domain_categorization_inputs(
 
     with col1:
         use_semantic = st.checkbox(
-            "Use smart matching (AI)",
+            t("use_smart_matching"),
             value=st.session_state.get(f'{key_prefix}_semantic', True),
             key=f"{key_prefix}_semantic_toggle",
-            help="Use AI to find similar items (smarter but slower)"
+            help=t("smart_matching_help")
         )
         st.session_state[f'{key_prefix}_semantic'] = use_semantic
 
     with col2:
         # Threshold slider (disabled when not using smart matching)
         threshold = st.slider(
-            "Matching strictness:",
+            t("matching_strictness_label"),
             min_value=MIN_SIMILARITY_THRESHOLD,
             max_value=MAX_SIMILARITY_THRESHOLD,
             value=st.session_state.get(f'{key_prefix}_threshold', DEFAULT_SIMILARITY_THRESHOLD),
             step=0.05,
             key=f"{key_prefix}_threshold_slider",
             disabled=not use_semantic,
-            help="How strict should matching be? (higher = fewer matches)"
+            help=t("matching_strictness_help")
         )
         if use_semantic:
             st.session_state[f'{key_prefix}_threshold'] = threshold
@@ -288,19 +290,15 @@ def render_l0_to_l1_unfold_form(
     """
     # Info tooltip explaining unfold operation (T031, SC-007)
     st.info(
-        "**Expand Result**: See all the values that were used to calculate this result. "
-        "The original list of values is preserved and can be restored."
+        f"**{t('expand_result_title')}**: {t('expand_result_info')}"
     )
 
     # Check if parent data exists (FR-003)
     has_parent = getattr(dataset, 'has_parent', False)
 
     if not has_parent:
-        st.warning("**Cannot expand**: This value wasn't calculated from a list.")
-        st.info(
-            "Expansion is only available for calculated results. "
-            "This value was entered directly, so there is no source list to show."
-        )
+        st.warning(f"**{t('cannot_expand')}**: {t('cannot_expand_reason')}")
+        st.info(t("expansion_unavailable_info"))
         return None
 
     # Get parent data for preview
@@ -309,10 +307,10 @@ def render_l0_to_l1_unfold_form(
                        getattr(dataset, 'description', 'aggregation') or 'aggregation'
 
     # Display calculation method (FR-002)
-    st.markdown(f"**Calculation method**: `{aggregation_type}`")
+    st.markdown(f"**{t('calculation_method')}**: `{aggregation_type}`")
 
     # Show source values preview
-    st.markdown("**Source values preview** (first 10):")
+    st.markdown(f"**{t('source_values_preview')}** ({t('first_n_values', n=10)}):")
     if parent_data is not None:
         preview = parent_data.head(10) if hasattr(parent_data, 'head') else parent_data[:10]
         if isinstance(preview, pd.Series):
@@ -322,12 +320,12 @@ def render_l0_to_l1_unfold_form(
 
         # Show total count
         total = len(parent_data) if hasattr(parent_data, '__len__') else "unknown"
-        st.caption(f"Total values: {total}")
+        st.caption(t("total_values", count=total))
 
     st.divider()
 
     # Confirmation button
-    if st.button("Expand to Source Values", key=f"{key_prefix}_unfold_btn", type="primary"):
+    if st.button(t("expand_to_source_values"), key=f"{key_prefix}_unfold_btn", type="primary"):
         return {'enrichment_func': 'source_expansion'}
 
     return None
@@ -358,18 +356,14 @@ def render_l1_to_l2_domain_form(
     Returns:
         Dict with domain enrichment parameters if submitted, None if not ready
     """
-    st.markdown("### Add Categories")
+    st.markdown(f"### {t('add_categories_title')}")
 
     # Info tooltip explaining categorization operation (T031, SC-007)
     st.info(
-        "**Add Categories**: Organize your values into groups by assigning each value to a category. "
-        "This creates a structured table from your list of values."
+        f"**{t('add_categories_title')}**: {t('add_categories_info')}"
     )
 
-    st.markdown(
-        "Group your values into categories to create a structured table. "
-        "Each value will be assigned to a category based on your matching method."
-    )
+    st.markdown(t("add_categories_desc"))
 
     # Reuse shared domain categorization inputs (FR-009)
     domains_input, use_semantic, threshold = _render_domain_categorization_inputs(
@@ -382,7 +376,7 @@ def render_l1_to_l2_domain_form(
 
     # Validation (T015)
     if not domains_list:
-        st.warning("Please enter at least one category to proceed.")
+        st.warning(t("enter_at_least_one_category"))
         return None
 
     st.divider()
@@ -391,14 +385,14 @@ def render_l1_to_l2_domain_form(
     data = dataset.get_data() if hasattr(dataset, 'get_data') else dataset.data
     column_name = getattr(dataset, 'name', None) or 'value'
 
-    with st.expander("Preview categorization"):
-        st.caption(f"Categories to apply: {', '.join(domains_list)}")
-        st.caption(f"Method: {'Smart matching (AI)' if use_semantic else 'Exact matching'}")
+    with st.expander(t("preview_categorization")):
+        st.caption(t("categories_to_apply", categories=', '.join(domains_list)))
+        st.caption(f"{t('matching_method')} {t('method_smart_matching') if use_semantic else t('method_exact_matching')}")
         if use_semantic:
-            st.caption(f"Strictness: {threshold}")
+            st.caption(t("strictness_label", value=threshold))
 
     # Submit button
-    if st.button("Apply Categories", key=f"{key_prefix}_submit_btn", type="primary"):
+    if st.button(t("apply_categories_btn"), key=f"{key_prefix}_submit_btn", type="primary"):
         return {
             'dimensions': domains_list,
             'use_semantic': use_semantic,
@@ -433,36 +427,32 @@ def render_l2_to_l3_entity_form(
     Returns:
         Dict with graph building parameters if submitted, None if not ready
     """
-    st.markdown("### Create Connections")
+    st.markdown(f"### {t('create_connections_title')}")
 
     # Info tooltip explaining connection building operation (T031, SC-007)
     st.info(
-        "**Create Connections**: Pick a column to create a connected view of your data. "
-        "Each unique value becomes an item that connects to your data rows."
+        f"**{t('create_connections_title')}**: {t('create_connections_info')}"
     )
 
-    st.markdown(
-        "Select a column to extract as a new item type. "
-        "Unique values in this column will become items linked to your data rows."
-    )
+    st.markdown(t("create_connections_desc"))
 
     # Get available columns
     data = dataset.get_data() if hasattr(dataset, 'get_data') else dataset.data
     if not isinstance(data, pd.DataFrame):
-        st.error("No table data available for creating connections.")
+        st.error(t("no_table_data"))
         return None
 
     available_columns = list(data.columns)
     if not available_columns:
-        st.error("No columns available for extraction.")
+        st.error(t("no_columns_available"))
         return None
 
     # Column selector (FR-011)
     selected_column = st.selectbox(
-        "Select column to extract:",
+        t("select_column_extract"),
         options=available_columns,
         key=f"{key_prefix}_column_select",
-        help="Choose which column's unique values will become connected items"
+        help=t("select_column_help")
     )
 
     # Column analysis (T022)
@@ -472,32 +462,29 @@ def render_l2_to_l3_entity_form(
 
         # Warning for low cardinality (T023)
         if unique_count == 1:
-            st.warning(
-                f"This column has only **1 unique value**. "
-                f"All {total_rows} rows will be connected to this single item."
-            )
+            st.warning(t("single_value_warning", rows=total_rows))
         else:
-            st.info(f"**{unique_count}** unique values → **{unique_count}** connected items")
+            st.info(t("unique_values_info", count=unique_count))
 
     st.divider()
 
     # Item type name (FR-012)
     entity_type_name = st.text_input(
-        "Name for this type of item:",
+        t("item_type_name_label"),
         value=st.session_state.get(f'{key_prefix}_entity_name', ''),
         key=f"{key_prefix}_entity_name_input",
-        placeholder="e.g., Department, Category, Region",
-        help="Name for the new item type"
+        placeholder=t("item_type_placeholder"),
+        help=t("item_type_help")
     )
     st.session_state[f'{key_prefix}_entity_name'] = entity_type_name
 
     # Connection type (FR-012)
     relationship_type = st.text_input(
-        "How should items be connected?",
+        t("connection_type_label"),
         value=st.session_state.get(f'{key_prefix}_rel_type', ''),
         key=f"{key_prefix}_rel_type_input",
-        placeholder="e.g., BELONGS_TO, HAS_CATEGORY, IN_REGION",
-        help="Label for the connection between items"
+        placeholder=t("connection_type_placeholder"),
+        help=t("connection_type_help")
     )
     st.session_state[f'{key_prefix}_rel_type'] = relationship_type
 
@@ -510,15 +497,15 @@ def render_l2_to_l3_entity_form(
 
     if not is_valid:
         if not entity_type_name.strip():
-            st.caption("Please enter a name for the item type.")
+            st.caption(t("enter_item_type_name"))
         if not relationship_type.strip():
-            st.caption("Please enter a connection type.")
+            st.caption(t("enter_connection_type"))
 
     st.divider()
 
     # Submit button
     if st.button(
-        "Create Connections",
+        t("create_connections_btn"),
         key=f"{key_prefix}_submit_btn",
         type="primary",
         disabled=not is_valid
@@ -570,11 +557,11 @@ def render_wizard_step_1_columns(
     Returns:
         True if user clicked "Continue" to proceed
     """
-    st.markdown("### Step 1 of 3: Select Columns to Connect")
-    st.markdown("Click on columns that might link your files together (like IDs or codes):")
+    st.markdown(f"### {t('step_1_of_3_columns')}")
+    st.markdown(t("click_columns_instruction"))
 
     if not dataframes:
-        st.warning("No files found to analyze.")
+        st.warning(t("no_files_to_analyze"))
         return False
 
     # Initialize session state for selected columns
@@ -587,9 +574,9 @@ def render_wizard_step_1_columns(
     selected_count = len(st.session_state[selected_key])
 
     if selected_count > 0:
-        st.success(f"✅ **{selected_count} columns selected** from {len(dataframes)} files")
+        st.success(f"✅ {t('columns_selected', count=selected_count, files=len(dataframes))}")
     else:
-        st.info(f"📊 **{len(dataframes)} files** with **{total_columns} columns** - click to select")
+        st.info(f"📊 {t('files_with_columns', files=len(dataframes), columns=total_columns)}")
 
     # Render columns grouped by file
     for filename, df in dataframes.items():
@@ -654,11 +641,11 @@ def render_wizard_step_1_columns(
         st.markdown("---")
 
     # Legend
-    st.caption("🔑 = Likely identifier | 🆔 = High uniqueness | Click to select/deselect")
+    st.caption(f"🔑 = {t('legend_identifier')} | 🆔 = {t('legend_high_uniqueness')} | {t('legend_click_select')}")
 
     # Show selected columns summary
     if st.session_state[selected_key]:
-        with st.expander(f"📋 Selected columns ({len(st.session_state[selected_key])})"):
+        with st.expander(f"📋 {t('selected_columns_count', count=len(st.session_state[selected_key]))}"):
             for col_key in sorted(st.session_state[selected_key]):
                 file_name, col_name = col_key.split(":", 1)
                 st.write(f"• **{col_name}** from _{file_name}_")
@@ -669,7 +656,7 @@ def render_wizard_step_1_columns(
     col_clear, col_space, col_next = st.columns([1, 1, 1])
 
     with col_clear:
-        if st.button("Clear All", key=f"{key_prefix}_clear"):
+        if st.button(t("clear_all_btn"), key=f"{key_prefix}_clear"):
             st.session_state[selected_key] = set()
             st.rerun()
 
@@ -677,7 +664,7 @@ def render_wizard_step_1_columns(
         # Require at least 2 columns to connect
         can_continue = len(st.session_state[selected_key]) >= 2
         if st.button(
-            "Continue →",
+            t("continue_arrow"),
             key=f"{key_prefix}_next",
             type="primary",
             disabled=not can_continue
@@ -685,7 +672,7 @@ def render_wizard_step_1_columns(
             return True
 
         if not can_continue:
-            st.caption("Select at least 2 columns")
+            st.caption(t("select_at_least_2"))
 
     return False
 
@@ -800,14 +787,14 @@ def render_wizard_step_2_connections(
     Returns:
         True if user clicked "Continue" to proceed
     """
-    st.markdown("### Step 2 of 3: Finding Connections")
+    st.markdown(f"### {t('step_2_of_3_connections')}")
 
     # Get selected columns from Step 1
     selected_columns = st.session_state.get(selected_columns_key, set())
 
     if len(selected_columns) < 2:
-        st.warning("Please select at least 2 columns in Step 1 first.")
-        if st.button("← Back to Step 1", key=f"{key_prefix}_back_no_cols"):
+        st.warning(t("select_columns_step1_first"))
+        if st.button(t("back_to_step_1"), key=f"{key_prefix}_back_no_cols"):
             _set_wizard_step(1)
             st.rerun()
         return False
@@ -826,8 +813,8 @@ def render_wizard_step_2_connections(
 
     # Check we have columns from at least 2 files
     if len(columns_by_file) < 2:
-        st.info("Select columns from at least 2 different files to create connections between them.")
-        if st.button("← Back to Step 1", key=f"{key_prefix}_back_same_file"):
+        st.info(t("select_from_2_files"))
+        if st.button(t("back_to_step_1"), key=f"{key_prefix}_back_same_file"):
             _set_wizard_step(1)
             st.rerun()
         return False
@@ -984,8 +971,8 @@ def render_wizard_step_2_connections(
 
     # Preview semantic matching if requested
     preview_key = f"{key_prefix}_preview_result"
-    if st.button("🔍 Preview Connections", key=f"{key_prefix}_preview_btn", type="secondary"):
-        with st.spinner("🔄 Finding matching items between your files..."):
+    if st.button(f"🔍 {t('preview_connections')}", key=f"{key_prefix}_preview_btn", type="secondary"):
+        with st.spinner(f"🔄 {t('finding_matching_items')}"):
             try:
                 from intuitiveness.discovery import run_row_vector_match
 
@@ -1013,9 +1000,9 @@ def render_wizard_step_2_connections(
                 st.rerun()
             except ImportError:
                 # Fallback if run_row_vector_match doesn't exist yet
-                st.info("Preview not available. Matching will be performed in the next step.")
+                st.info(t("preview_not_available"))
             except Exception as e:
-                st.error(f"Error during preview: {e}")
+                st.error(t("error_during_preview", error=str(e)))
 
     # Display preview results with improved visualization
     if preview_key in st.session_state:
@@ -1061,7 +1048,7 @@ def render_wizard_step_2_connections(
                     </div>
                     """, unsafe_allow_html=True)
         else:
-            st.warning("🔍 No connections found at this strictness level. Try moving the slider to the left for looser matching.")
+            st.warning(f"🔍 {t('no_connections_at_threshold')}")
 
     st.divider()
 
@@ -1069,12 +1056,12 @@ def render_wizard_step_2_connections(
     col_back, col_space, col_next = st.columns([1, 1, 1])
 
     with col_back:
-        if st.button("← Back", key=f"{key_prefix}_back"):
+        if st.button(t("back_arrow"), key=f"{key_prefix}_back"):
             _set_wizard_step(1)
             st.rerun()
 
     with col_next:
-        if st.button("Continue →", key=f"{key_prefix}_next", type="primary"):
+        if st.button(t("continue_arrow"), key=f"{key_prefix}_next", type="primary"):
             # Store row vector configuration for Step 3 (per spec FR-003)
             # This is the spec-compliant format: columns form row vectors, embeddings match rows
             st.session_state[connections_key] = {
@@ -1536,8 +1523,8 @@ def render_wizard_step_3_confirm(
     Returns:
         Joined DataFrame if user confirms, None otherwise
     """
-    st.markdown("### Step 3 of 3: Your Joined Dataset")
-    st.markdown("Here's your unified L3 table built from semantic connections:")
+    st.markdown(f"### {t('step_3_of_3_joined')}")
+    st.markdown(t("joined_l3_desc"))
 
     # Determine Step 2 key prefix (derive from Step 3 prefix if not provided)
     if step2_key_prefix is None:
@@ -1552,8 +1539,8 @@ def render_wizard_step_3_confirm(
     is_row_vector_format = isinstance(connections, dict) and connections.get('method') == 'row_vector_embeddings'
 
     if not connections:
-        st.warning("No connections defined. Go back to Step 2 to connect your columns.")
-        if st.button("← Back to Step 2", key=f"{key_prefix}_back_no_conn"):
+        st.warning(t("no_connections_defined"))
+        if st.button(t("back_to_step_2"), key=f"{key_prefix}_back_no_conn"):
             _set_wizard_step(2)
             st.rerun()
         return None
@@ -1571,7 +1558,7 @@ def render_wizard_step_3_confirm(
     joined_key = f"{key_prefix}_joined_df"
 
     if joined_key not in st.session_state:
-        with st.spinner("Building joined table using row-vector semantic matching..." if is_row_vector_format else "Building joined table..."):
+        with st.spinner(t("building_joined_table") if is_row_vector_format else t("building_joined_table_simple")):
             joined_df = _perform_table_join(
                 dataframes,
                 connections,
@@ -1583,8 +1570,8 @@ def render_wizard_step_3_confirm(
     joined_df = st.session_state[joined_key]
 
     if joined_df is None or joined_df.empty:
-        st.error("Could not create joined table. Try lowering the matching strictness in Step 2.")
-        if st.button("← Back to Step 2", key=f"{key_prefix}_back_empty"):
+        st.error(t("could_not_create_joined"))
+        if st.button(t("back_to_step_2"), key=f"{key_prefix}_back_empty"):
             # Clear cached joined_df so it rebuilds with new threshold
             if joined_key in st.session_state:
                 del st.session_state[joined_key]
@@ -1595,37 +1582,37 @@ def render_wizard_step_3_confirm(
     # Summary stats
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Rows", f"{len(joined_df):,}")
+        st.metric(t("rows_label"), f"{len(joined_df):,}")
     with col2:
-        st.metric("Columns", f"{len(joined_df.columns):,}")
+        st.metric(t("columns_label"), f"{len(joined_df.columns):,}")
     with col3:
         if is_row_vector_format:
             threshold = connections.get('threshold', 0.75)
-            st.metric("Similarity Threshold", f"{threshold:.0%}")
+            st.metric(t("similarity_threshold"), f"{threshold:.0%}")
         else:
-            st.metric("Connections Used", f"{len(connections)}")
+            st.metric(t("connections_used"), f"{len(connections)}")
 
     # Show connection summary
-    st.markdown("**Matching method:**")
+    st.markdown(f"**{t('matching_method')}**")
     if is_row_vector_format:
         files_config = connections.get('files', {})
-        st.markdown("🧠 **Row-vector semantic matching** (per spec FR-003)")
+        st.markdown(f"🧠 **{t('row_vector_semantic')}**")
         for file_name, cols in files_config.items():
             st.markdown(f"  - 📁 `{file_name}`: {', '.join(f'`{c}`' for c in cols)}")
     else:
         for conn in connections:
             method_icon = "🔗" if conn['method'] == 'common_key' else "🧠"
-            method_label = "exact match" if conn['method'] == 'common_key' else "semantic"
+            method_label = t("exact_match") if conn['method'] == 'common_key' else t("semantic")
             st.markdown(f"- {method_icon} `{conn['col1']}` ↔ `{conn['col2']}` ({method_label})")
 
     st.divider()
 
     # Table preview
-    st.markdown("**Preview of joined L3 dataset:**")
+    st.markdown(f"**{t('preview_joined_l3')}**")
 
     # Show preview with pagination
     preview_rows = st.slider(
-        "Rows to preview",
+        t("rows_to_preview"),
         min_value=5,
         max_value=min(100, len(joined_df)),
         value=min(20, len(joined_df)),
@@ -1639,11 +1626,11 @@ def render_wizard_step_3_confirm(
     )
 
     # Column info expander
-    with st.expander("📋 Column details"):
+    with st.expander(f"📋 {t('column_details')}"):
         for col in joined_df.columns:
             dtype = joined_df[col].dtype
             non_null = joined_df[col].notna().sum()
-            st.text(f"• {col}: {dtype} ({non_null:,} non-null)")
+            st.text(f"• {col}: {dtype} ({non_null:,} {t('non_null')})")
 
     st.divider()
 
@@ -1651,7 +1638,7 @@ def render_wizard_step_3_confirm(
     col_back, col_space, col_confirm = st.columns([1, 1, 1])
 
     with col_back:
-        if st.button("← Back", key=f"{key_prefix}_back"):
+        if st.button(t("back_arrow"), key=f"{key_prefix}_back"):
             # Clear cached join
             if joined_key in st.session_state:
                 del st.session_state[joined_key]
@@ -1660,11 +1647,11 @@ def render_wizard_step_3_confirm(
 
     with col_confirm:
         if st.button(
-            "✅ Confirm & Use This Dataset",
+            f"✅ {t('confirm_use_dataset')}",
             key=f"{key_prefix}_confirm",
             type="primary"
         ):
-            st.success("Dataset confirmed! Your L3 table is ready.")
+            st.success(t("dataset_confirmed"))
             return joined_df
 
     return None
