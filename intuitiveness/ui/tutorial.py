@@ -3,7 +3,7 @@ Research Paper Viewer - Dialog Modal
 =====================================
 
 Clean modal dialog showing the Sarazin & Mourey research paper
-using Mozilla PDF.js viewer (Chrome-compatible).
+using streamlit-pdf-viewer component.
 
 Feature: 007-streamlit-design-makeup
 Reference: Intuitiveness methodology paper
@@ -11,6 +11,7 @@ Reference: Intuitiveness methodology paper
 
 import streamlit as st
 from pathlib import Path
+from streamlit_pdf_viewer import pdf_viewer
 from intuitiveness.ui.i18n import t
 
 
@@ -110,67 +111,25 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display paper preview card with action buttons
-    # (iframe embedding blocked by browser security on Cloud)
-    github_view_url = "https://github.com/ArthurSrz/intuitiveness/blob/main/scientific_article/Intuitiveness.pdf"
-
-    st.markdown(f"""
-    <style>
-    .paper-card {{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        color: white;
-        margin: 1rem 0;
-    }}
-    .paper-card h3 {{
-        margin: 0 0 0.5rem 0;
-        font-size: 1.4rem;
-    }}
-    .paper-card p {{
-        margin: 0;
-        opacity: 0.9;
-        font-size: 0.95rem;
-    }}
-    .paper-icon {{
-        font-size: 3rem;
-        margin-bottom: 1rem;
-    }}
-    </style>
-    <div class="paper-card">
-        <div class="paper-icon">📄</div>
-        <h3>Intuitiveness: A Data Redesign Method</h3>
-        <p>Sarazin & Mourey • Research Paper</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # Action buttons
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.link_button(
-            f"🔗 {t('view_paper')}",
-            github_view_url,
-            use_container_width=True,
+    # Display PDF using streamlit-pdf-viewer component
+    if PAPER_PATH.exists():
+        pdf_viewer(
+            input=PAPER_PATH.read_bytes(),
+            height=550,
         )
 
-    with col2:
-        if PAPER_PATH.exists():
-            pdf_bytes = PAPER_PATH.read_bytes()
-            st.download_button(
-                label=f"📥 {t('download_pdf')}",
-                data=pdf_bytes,
-                file_name="Intuitiveness_Sarazin_Mourey.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-            )
-        else:
-            st.link_button(
-                f"📥 {t('download_pdf')}",
-                GITHUB_PDF_RAW_URL,
-                use_container_width=True,
-            )
+        # Download button
+        st.download_button(
+            label=f"📥 {t('download_pdf')}",
+            data=PAPER_PATH.read_bytes(),
+            file_name="Intuitiveness_Sarazin_Mourey.pdf",
+            mime="application/pdf",
+        )
+    else:
+        # Fallback: show link to GitHub
+        github_url = "https://github.com/ArthurSrz/intuitiveness/blob/main/scientific_article/Intuitiveness.pdf"
+        st.warning(t("pdf_not_found"))
+        st.link_button(f"🔗 {t('view_paper')}", github_url, use_container_width=True)
 
     st.markdown("")
 
