@@ -68,6 +68,12 @@ def _clear_search_state() -> None:
 
 def _get_service() -> DataGouvSearchService:
     """Get or create the search service instance."""
+    # Recreate service if missing NL support (after upgrade)
+    if "datagouv_service" in st.session_state:
+        svc = st.session_state.datagouv_service
+        if not hasattr(svc, '_nl_engine'):
+            del st.session_state.datagouv_service
+
     if "datagouv_service" not in st.session_state:
         st.session_state.datagouv_service = DataGouvSearchService()
     return st.session_state.datagouv_service
@@ -784,6 +790,14 @@ def render_search_interface() -> Optional[pd.DataFrame]:
                 results = service.search(submitted_query, page=1, page_size=10)
                 st.session_state[SESSION_KEYS["results"]] = results
                 st.session_state[SESSION_KEYS["error"]] = None
+
+                # Store NL result for display (safe check for cached service)
+                nl_result = getattr(service, 'last_nl_result', None)
+                if nl_result:
+                    st.session_state["datagouv_nl_keywords"] = nl_result.keywords
+                else:
+                    st.session_state["datagouv_nl_keywords"] = None
+
             except DataGouvAPIError:
                 st.session_state[SESSION_KEYS["error"]] = "Search failed. Please try again."
                 st.session_state[SESSION_KEYS["results"]] = None
@@ -797,8 +811,13 @@ def render_search_interface() -> Optional[pd.DataFrame]:
         if results.total == 0:
             render_no_results(st.session_state.get(SESSION_KEYS["query"], ""))
         else:
-            # Results count
-            st.success(f"**{results.total} datasets found** — Click 'Load CSV' to import directly")
+            # Results count with NL keywords indicator
+            nl_keywords = st.session_state.get("datagouv_nl_keywords")
+            if nl_keywords:
+                keywords_display = ", ".join(nl_keywords[:4])
+                st.success(f"**{results.total} datasets found** — Keywords: _{keywords_display}_")
+            else:
+                st.success(f"**{results.total} datasets found** — Click to add to selection")
 
             # Render dataset cards with direct load
             result = render_dataset_grid(results.datasets, service)

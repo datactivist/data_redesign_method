@@ -1,0 +1,483 @@
+"""
+DataGouv Search Service
+=======================
+
+Wrapper around the DataGouvAPI library providing a simplified interface for the
+Streamlit UI. Handles search, dataset resource listing, and CSV loading.
+
+Enhanced with SmolLM3-3B natural language understanding for French queries.
+Flow: User NL query → SmolLM3-3B extracts keywords → REST API search
+
+This service follows the contract defined in:
+  specs/008-datagouv-search/contracts/datagouv-search-api.md
+
+Feature: 008-datagouv-mcp
+"""
+
+import sys
+from pathlib import Path
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional, List, Tuple
+import pandas as pd
+import logging
+
+# Import NL query engine for natural language understanding
+from intuitiveness.data_sources.nl_query import NLQueryEngine, NLQueryResult
+
+# Add the skill library to path for import
+_SKILL_LIB_PATH = Path(__file__).parent.parent.parent / "skills" / "data-gouv" / "lib"
+if str(_SKILL_LIB_PATH) not in sys.path:
+    sys.path.insert(0, str(_SKILL_LIB_PATH))
+
+from datagouv import DataGouvAPI
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Data Classes
+# =============================================================================
+
+@dataclass
+class DatasetInfo:
+    """Summary info about a dataset from search results."""
+    id: str
+    title: str
+    description: str  # Truncated to 200 chars for display
+    organization_name: str
+    last_modified: Optional[datetime]
+    resource_count: int
+    has_csv: bool
+
+
+@dataclass
+class ResourceInfo:
+    """Info about a downloadable resource within a dataset."""
+    id: str
+    title: str
+    url: str
+    format: str
+    filesize_bytes: Optional[int]
+    filesize_display: str  # Human-readable, e.g., "2.5 MB"
+    last_modified: Optional[datetime]
+
+
+@dataclass
+class SearchResult:
+    """Result of a dataset search."""
+    datasets: List[DatasetInfo]
+    total: int
+    page: int
+    page_size: int
+    has_more: bool
+
+
+# =============================================================================
+# Exceptions
+# =============================================================================
+
+class DataGouvAPIError(Exception):
+    """Raised when API call fails."""
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
+
+
+class DataGouvLoadError(Exception):
+    """Raised when resource loading fails."""
+    def __init__(self, message: str, url: str):
+        self.message = message
+        self.url = url
+        super().__init__(message)
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _format_filesize(size_bytes: Optional[int]) -> str:
+    """Convert bytes to human-readable format."""
+    if size_bytes is None:
+        return "Unknown size"
+
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
+def _parse_datetime(date_str: Optional[str]) -> Optional[datetime]:
+    """Parse ISO datetime string from API response."""
+    if not date_str:
+        return None
+    try:
+        # Handle various ISO formats from data.gouv.fr
+        if 'T' in date_str:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        return datetime.strptime(date_str[:10], '%Y-%m-%d')
+    except (ValueError, TypeError):
+        return None
+
+
+def _truncate_description(description: Optional[str], max_length: int = 400) -> str:
+    """Truncate description to max_length chars with ellipsis."""
+    if not description:
+        return ""
+    description = description.strip()
+    # Remove markdown/HTML formatting for cleaner display
+    description = description.replace('\n', ' ').replace('\r', ' ')
+    if len(description) <= max_length:
+        return description
+    return description[:max_length - 3].rsplit(' ', 1)[0] + "..."
+
+
+# =============================================================================
+# Main Service Class
+# =============================================================================
+
+class DataGouvSearchService:
+    """
+    Service for searching and loading data.gouv.fr datasets.
+
+    Wraps the DataGouvAPI library with a cleaner interface for UI components.
+    Enhanced with SmolLM3-3B for natural language query understanding.
+
+    Example:
+        >>> service = DataGouvSearchService()
+        >>> # Simple keyword search
+        >>> results = service.search("vaccination")
+        >>> # Natural language query (French)
+        >>> results = service.search("Quels sont les résultats scolaires des collèges?")
+        >>> for dataset in results.datasets:
+        ...     print(dataset.title)
+    """
+
+    def __init__(self, cache_dir: Optional[str] = None, hf_token: Optional[str] = None):
+        """
+        Initialize the search service.
+
+        Args:
+            cache_dir: Optional custom cache directory. Defaults to ~/.cache/datagouv
+            hf_token: Optional HuggingFace token for NL queries. If not provided,
+                      looks for HF_TOKEN env var or Streamlit secrets.
+        """
+        self._api = DataGouvAPI(cache_dir=cache_dir)
+        self._hf_token = hf_token
+        self._nl_engine: Optional[NLQueryEngine] = None
+        self._last_nl_result: Optional[NLQueryResult] = None
+
+    def _get_nl_engine(self) -> Optional[NLQueryEngine]:
+        """Lazy-load NL engine (only when needed)."""
+        if self._nl_engine is None:
+            try:
+                self._nl_engine = NLQueryEngine(self._hf_token)
+            except ValueError:
+                # No HF token available - NL disabled
+                logger.warning("No HF token - NL query enhancement disabled")
+                return None
+        return self._nl_engine
+
+    def _is_natural_language(self, query: str) -> bool:
+        """
+        Detect if query is natural language (vs simple keywords).
+
+        Heuristics:
+        - Contains question words (quels, quelles, comment, où, etc.)
+        - Contains verbs (sont, est, contient, donne, etc.)
+        - Has 5+ words
+        - Ends with "?"
+        """
+        query_lower = query.lower().strip()
+
+        # Question words (French)
+        question_words = {
+            'quels', 'quelles', 'quel', 'quelle', 'comment', 'où', 'ou',
+            'pourquoi', 'combien', 'qui', 'que', 'quoi', 'lesquels', 'lesquelles'
+        }
+
+        # Common verbs in French questions
+        verbs = {
+            'sont', 'est', 'ont', 'a', 'contient', 'contiennent',
+            'donne', 'donnent', 'montre', 'montrent', 'liste',
+            'trouve', 'trouver', 'cherche', 'chercher', 'indique'
+        }
+
+        words = query_lower.replace('?', '').split()
+
+        # Check heuristics
+        if query_lower.endswith('?'):
+            return True
+        if any(w in question_words for w in words):
+            return True
+        if any(w in verbs for w in words) and len(words) >= 4:
+            return True
+        if len(words) >= 6:
+            return True
+
+        return False
+
+    def _search_with_keywords(
+        self,
+        keywords: List[str],
+        page: int,
+        page_size: int
+    ) -> Tuple[List[dict], int]:
+        """
+        Search with multiple keywords, combining unique results.
+
+        data.gouv.fr is picky with multi-word queries, so we search
+        each keyword individually and merge results.
+        """
+        all_results = []
+        seen_ids = set()
+        total = 0
+
+        for keyword in keywords[:4]:  # Limit to 4 keywords
+            try:
+                raw = self._api.search_datasets(
+                    query=keyword.strip(),
+                    page_size=page_size,
+                    page=page
+                )
+                total = max(total, raw.get('total', 0))
+
+                for dataset in raw.get('data', []):
+                    did = dataset.get('id')
+                    if did and did not in seen_ids:
+                        seen_ids.add(did)
+                        all_results.append(dataset)
+
+                        if len(all_results) >= page_size:
+                            break
+
+            except Exception as e:
+                logger.warning(f"Search failed for keyword '{keyword}': {e}")
+                continue
+
+            if len(all_results) >= page_size:
+                break
+
+        return all_results[:page_size], total
+
+    @property
+    def last_nl_result(self) -> Optional[NLQueryResult]:
+        """Get the last NL parsing result (keywords, intent, etc.)."""
+        return self._last_nl_result
+
+    def search(
+        self,
+        query: str,
+        page: int = 1,
+        page_size: int = 10,
+        use_nl: Optional[bool] = None
+    ) -> SearchResult:
+        """
+        Search for datasets matching the query.
+
+        Automatically detects natural language queries and uses SmolLM3-3B
+        to extract keywords for better search results.
+
+        Args:
+            query: Search query (keywords or natural language French)
+            page: Page number (1-indexed)
+            page_size: Results per page (max 20)
+            use_nl: Force NL processing on/off. If None, auto-detect.
+
+        Returns:
+            SearchResult containing datasets and pagination info
+
+        Raises:
+            DataGouvAPIError: If API call fails
+        """
+        self._last_nl_result = None
+
+        if not query or not query.strip():
+            return SearchResult(
+                datasets=[],
+                total=0,
+                page=page,
+                page_size=page_size,
+                has_more=False
+            )
+
+        # Clamp page_size to reasonable limits
+        page_size = min(max(1, page_size), 20)
+
+        # Determine if we should use NL processing
+        should_use_nl = use_nl if use_nl is not None else self._is_natural_language(query)
+
+        try:
+            if should_use_nl:
+                # Use SmolLM3-3B to extract keywords from natural language
+                nl_engine = self._get_nl_engine()
+                if nl_engine:
+                    logger.info(f"NL query detected: '{query}'")
+                    nl_result = nl_engine.parse_query(query)
+                    self._last_nl_result = nl_result
+                    logger.info(f"Extracted keywords: {nl_result.keywords}")
+
+                    # Search with extracted keywords
+                    raw_data, total = self._search_with_keywords(
+                        nl_result.keywords, page, page_size
+                    )
+                    raw_results = {'data': raw_data, 'total': total}
+                else:
+                    # No NL engine - fall back to direct search
+                    raw_results = self._api.search_datasets(
+                        query=query.strip(),
+                        page_size=page_size,
+                        page=page
+                    )
+            else:
+                # Direct keyword search
+                raw_results = self._api.search_datasets(
+                    query=query.strip(),
+                    page_size=page_size,
+                    page=page
+                )
+        except Exception as e:
+            logger.error(f"API search failed: {e}")
+            raise DataGouvAPIError(f"Search failed: {str(e)}")
+
+        # Transform raw API response to our data classes
+        datasets = []
+        for raw_dataset in raw_results.get('data', []):
+            # Check if dataset has CSV resources
+            resources = raw_dataset.get('resources', [])
+            has_csv = any(
+                (r.get('format') or '').lower() == 'csv'
+                for r in resources
+            )
+
+            # Get organization name
+            org = raw_dataset.get('organization')
+            org_name = org.get('name', 'Unknown') if org else 'Unknown'
+
+            dataset = DatasetInfo(
+                id=raw_dataset.get('id', ''),
+                title=raw_dataset.get('title', 'Untitled'),
+                description=_truncate_description(raw_dataset.get('description')),
+                organization_name=org_name,
+                last_modified=_parse_datetime(raw_dataset.get('last_modified')),
+                resource_count=len(resources),
+                has_csv=has_csv
+            )
+            datasets.append(dataset)
+
+        total = raw_results.get('total', 0)
+        has_more = (page * page_size) < total
+
+        return SearchResult(
+            datasets=datasets,
+            total=total,
+            page=page,
+            page_size=page_size,
+            has_more=has_more
+        )
+
+    def get_dataset_resources(
+        self,
+        dataset_id: str,
+        format_filter: str = "csv"
+    ) -> List[ResourceInfo]:
+        """
+        Get resources for a specific dataset, filtered by format.
+
+        Args:
+            dataset_id: Dataset ID from search results
+            format_filter: File format to filter (default: csv)
+
+        Returns:
+            List of resources matching the format filter
+        """
+        try:
+            raw_dataset = self._api.get_dataset(dataset_id)
+        except Exception as e:
+            logger.error(f"Failed to get dataset {dataset_id}: {e}")
+            return []
+
+        if not raw_dataset:
+            return []
+
+        resources = []
+        for raw_resource in raw_dataset.get('resources', []):
+            resource_format = (raw_resource.get('format') or '').lower()
+
+            # Apply format filter
+            if format_filter and resource_format != format_filter.lower():
+                continue
+
+            filesize = raw_resource.get('filesize')
+
+            resource = ResourceInfo(
+                id=raw_resource.get('id', ''),
+                title=raw_resource.get('title', 'Untitled'),
+                url=raw_resource.get('url', ''),
+                format=resource_format,
+                filesize_bytes=filesize,
+                filesize_display=_format_filesize(filesize),
+                last_modified=_parse_datetime(raw_resource.get('last_modified'))
+            )
+            resources.append(resource)
+
+        # Sort by last_modified (most recent first)
+        resources.sort(
+            key=lambda r: r.last_modified or datetime.min,
+            reverse=True
+        )
+
+        return resources
+
+    def load_resource(
+        self,
+        resource_url: str,
+        filename: str
+    ) -> pd.DataFrame:
+        """
+        Download and load a resource as a DataFrame.
+
+        Args:
+            resource_url: URL of the resource to download
+            filename: Display name for the loaded data
+
+        Returns:
+            Loaded DataFrame ready for L4 workflow
+
+        Raises:
+            DataGouvLoadError: If download or parsing fails
+        """
+        if not resource_url:
+            raise DataGouvLoadError("No resource URL provided", resource_url)
+
+        try:
+            df = self._api.load_csv(resource_url)
+        except Exception as e:
+            logger.error(f"Failed to load resource from {resource_url}: {e}")
+            raise DataGouvLoadError(f"Failed to load: {str(e)}", resource_url)
+
+        if df is None:
+            raise DataGouvLoadError(
+                "Could not parse CSV file. The format may be incompatible.",
+                resource_url
+            )
+
+        logger.info(f"Loaded {len(df)} rows from {filename}")
+        return df
+
+    def is_available(self) -> bool:
+        """
+        Check if data.gouv.fr API is reachable.
+
+        Returns:
+            True if API responds, False otherwise
+        """
+        try:
+            # Try a minimal search to test connectivity
+            result = self._api.search_datasets("test", page_size=1)
+            return 'data' in result
+        except Exception as e:
+            logger.warning(f"API availability check failed: {e}")
+            return False
