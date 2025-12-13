@@ -33,6 +33,47 @@ SESSION_KEY_TRANSFORMED_DF = "transformed_df"
 SESSION_KEY_TRANSFORMATION_LOG = "transformation_log"
 SESSION_KEY_BENCHMARK_REPORT = "benchmark_report"
 SESSION_KEY_EXPORT_FORMAT = "export_format"
+# P0 FIX: Report history for versioning (Mx. Context Keeper)
+SESSION_KEY_QUALITY_REPORTS_HISTORY = "quality_reports_history"
+SESSION_KEY_CURRENT_REPORT_INDEX = "current_report_index"
+
+
+def _save_report_to_history(report) -> None:
+    """
+    P0 FIX: Save report to history instead of overwriting.
+
+    This preserves the original assessment so users can compare
+    before/after quality scores across transformation iterations.
+    """
+    if SESSION_KEY_QUALITY_REPORTS_HISTORY not in st.session_state:
+        st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY] = []
+
+    # Append to history
+    st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY].append(report)
+    # Update current index
+    st.session_state[SESSION_KEY_CURRENT_REPORT_INDEX] = (
+        len(st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY]) - 1
+    )
+    # Also set current report (for backward compatibility)
+    st.session_state[SESSION_KEY_QUALITY_REPORT] = report
+
+
+def _get_initial_report():
+    """Get the initial (first) quality report from history."""
+    history = st.session_state.get(SESSION_KEY_QUALITY_REPORTS_HISTORY, [])
+    return history[0] if history else None
+
+
+def _get_current_report():
+    """Get the current (latest) quality report."""
+    return st.session_state.get(SESSION_KEY_QUALITY_REPORT)
+
+
+def _clear_report_history() -> None:
+    """Clear all report history (for starting fresh)."""
+    st.session_state.pop(SESSION_KEY_QUALITY_REPORTS_HISTORY, None)
+    st.session_state.pop(SESSION_KEY_CURRENT_REPORT_INDEX, None)
+    st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
 
 
 def _score_color(score: float) -> str:
@@ -173,7 +214,8 @@ def render_assessment_button(
                 progress_callback=progress_callback,
             )
 
-            st.session_state[SESSION_KEY_QUALITY_REPORT] = report
+            # P0 FIX: Save to history instead of overwriting
+            _save_report_to_history(report)
             progress_bar.progress(1.0, text="Assessment complete!")
             time.sleep(0.5)
             progress_bar.empty()
@@ -1539,9 +1581,14 @@ def render_quality_dashboard() -> None:
         col1, col2 = st.columns([4, 1])
         with col2:
             if st.button("🔄 New Assessment", use_container_width=True):
-                st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
+                # P0 FIX: Clear entire history when starting completely fresh
+                _clear_report_history()
                 st.session_state.pop(SESSION_KEY_QUALITY_DF, None)
                 st.session_state.pop(SESSION_KEY_QUALITY_FILE_NAME, None)
+                st.session_state.pop(SESSION_KEY_TRANSFORMED_DF, None)
+                st.session_state.pop(SESSION_KEY_TRANSFORMATION_LOG, None)
+                st.session_state.pop(SESSION_KEY_BENCHMARK_REPORT, None)
+                st.session_state.pop(SESSION_KEY_APPLIED_SUGGESTIONS, None)
                 st.rerun()
 
         render_quality_report(report)

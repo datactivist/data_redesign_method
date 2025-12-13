@@ -643,17 +643,34 @@ class ExportPackage:
     Package containing exported dataset and supporting files.
 
     Includes Python code snippet for immediate use in Jupyter.
+
+    P0 FIX: Added dataset field to hold actual DataFrame (Prof. Schema Whisperer).
+    Note: dataset is excluded from serialization due to size.
     """
 
     # Core data
     dataset_name: str = "dataset"
     format: str = "csv"  # 'csv' | 'pickle' | 'parquet'
 
+    # P0 FIX: The actual dataset - excluded from to_dict() serialization
+    # Use field(default=None, repr=False) to avoid issues with mutable defaults
+    dataset: Any = field(default=None, repr=False)
+
     # Metadata
     target_column: Optional[str] = None
     transformation_log: Optional[TransformationLog] = None
     row_count: int = 0
     column_count: int = 0
+
+    def __post_init__(self):
+        """Auto-fill row/column count from dataset if provided."""
+        if self.dataset is not None:
+            import pandas as pd
+            if isinstance(self.dataset, pd.DataFrame):
+                if self.row_count == 0:
+                    self.row_count = len(self.dataset)
+                if self.column_count == 0:
+                    self.column_count = len(self.dataset.columns)
 
     @property
     def filename(self) -> str:
