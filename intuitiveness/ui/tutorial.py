@@ -10,6 +10,7 @@ Reference: Intuitiveness methodology paper
 """
 
 import streamlit as st
+import base64
 from pathlib import Path
 from streamlit_extras.pdf_viewer import pdf_viewer
 
@@ -127,7 +128,20 @@ File size: {PAPER_PATH.stat().st_size if PAPER_PATH.exists() else 'N/A'} bytes
         try:
             pdf_bytes = PAPER_PATH.read_bytes()
             st.caption(f"Loaded {len(pdf_bytes)} bytes")
-            pdf_viewer(pdf_bytes, height=500)
+
+            # Use base64 iframe (more reliable on Streamlit Cloud)
+            b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+            pdf_display = f'''
+                <iframe
+                    src="data:application/pdf;base64,{b64_pdf}"
+                    width="100%"
+                    height="500px"
+                    type="application/pdf"
+                    style="border: 1px solid #e2e8f0; border-radius: 8px;">
+                </iframe>
+            '''
+            st.markdown(pdf_display, unsafe_allow_html=True)
+
         except Exception as e:
             st.error(f"Error loading PDF: {e}")
             st.exception(e)
