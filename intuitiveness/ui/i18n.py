@@ -718,6 +718,106 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Search for more datasets:",
         "fr": "Rechercher d'autres jeux de données:",
     },
+
+    # ============================================
+    # TUTORIAL / PAPER MODAL
+    # ============================================
+    "tutorial_modal_title": {
+        "en": "The Intuitiveness Method",
+        "fr": "La méthode Intuitiveness",
+    },
+    "tutorial_description": {
+        "en": "Understanding the methodology behind intuitive data redesign",
+        "fr": "Comprendre la méthodologie du redesign intuitif de données",
+    },
+    "download_pdf": {
+        "en": "Download PDF",
+        "fr": "Télécharger le PDF",
+    },
+    "start_redesigning": {
+        "en": "Start Redesigning",
+        "fr": "Commencer le redesign",
+    },
+    "view_paper": {
+        "en": "View Paper",
+        "fr": "Voir l'article",
+    },
+
+    # ============================================
+    # BUTTONS & NAVIGATION
+    # ============================================
+    "next_button": {
+        "en": "Next",
+        "fr": "Suivant",
+    },
+    "continue_button": {
+        "en": "Continue",
+        "fr": "Continuer",
+    },
+    "back_button": {
+        "en": "Back",
+        "fr": "Retour",
+    },
+    "cancel_button": {
+        "en": "Cancel",
+        "fr": "Annuler",
+    },
+    "confirm_button": {
+        "en": "Confirm",
+        "fr": "Confirmer",
+    },
+    "clear_all": {
+        "en": "Clear all",
+        "fr": "Tout effacer",
+    },
+    "load_more": {
+        "en": "Load more results",
+        "fr": "Charger plus de résultats",
+    },
+    "add_to_selection": {
+        "en": "Add to selection",
+        "fr": "Ajouter à la sélection",
+    },
+
+    # ============================================
+    # RECOVERY BANNER
+    # ============================================
+    "welcome_back": {
+        "en": "Welcome back!",
+        "fr": "Bon retour !",
+    },
+    "continue_where_left": {
+        "en": "Continue where I left off",
+        "fr": "Reprendre où j'en étais",
+    },
+    "start_fresh": {
+        "en": "Start fresh",
+        "fr": "Recommencer à zéro",
+    },
+    "yes_start_fresh": {
+        "en": "Yes, start fresh",
+        "fr": "Oui, recommencer",
+    },
+
+    # ============================================
+    # DATA DISPLAY
+    # ============================================
+    "no_data_display": {
+        "en": "No data to display.",
+        "fr": "Aucune donnée à afficher.",
+    },
+    "no_description_available": {
+        "en": "No description available",
+        "fr": "Aucune description disponible",
+    },
+    "failed_to_load": {
+        "en": "Failed to load.",
+        "fr": "Échec du chargement.",
+    },
+    "selected": {
+        "en": "Selected",
+        "fr": "Sélectionné",
+    },
 }
 
 

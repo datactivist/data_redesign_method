@@ -13,6 +13,7 @@ import streamlit as st
 import base64
 from pathlib import Path
 from streamlit_extras.pdf_viewer import pdf_viewer
+from intuitiveness.ui.i18n import t
 
 
 # =============================================================================
@@ -84,27 +85,27 @@ def should_show_tutorial() -> bool:
 # Main Paper Dialog
 # =============================================================================
 
-@st.dialog("The Intuitiveness Method", width="large")
+@st.dialog(t("tutorial_modal_title"), width="large")
 def show_tutorial_dialog():
     """
     Display the research paper in a modal dialog.
     """
-    st.markdown("""
+    st.markdown(f"""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600&display=swap');
-    .paper-header {
+    .paper-header {{
         font-family: 'Outfit', sans-serif;
         text-align: center;
         margin-bottom: 1rem;
-    }
-    .paper-header p {
+    }}
+    .paper-header p {{
         color: #64748b;
         font-size: 0.95rem;
         margin: 0;
-    }
+    }}
     </style>
     <div class="paper-header">
-        <p>Understanding the methodology behind intuitive data redesign</p>
+        <p>{t("tutorial_description")}</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -128,7 +129,7 @@ def show_tutorial_dialog():
     if PAPER_PATH.exists():
         pdf_bytes = PAPER_PATH.read_bytes()
         st.download_button(
-            label="📥 Download PDF",
+            label=f"📥 {t('download_pdf')}",
             data=pdf_bytes,
             file_name="Intuitiveness_Sarazin_Mourey.pdf",
             mime="application/pdf",
@@ -139,7 +140,7 @@ def show_tutorial_dialog():
     # Close button
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("Start Redesigning", type="primary", use_container_width=True):
+        if st.button(t("start_redesigning"), type="primary", use_container_width=True):
             mark_tutorial_completed()
             st.rerun()
 
@@ -163,7 +164,7 @@ def render_tutorial(on_complete=None) -> bool:
 
 def render_tutorial_replay_button():
     """Render a button to view the paper again (for sidebar)."""
-    if st.button("📄 View Paper", key="replay_tutorial", use_container_width=True):
+    if st.button(f"📄 {t('view_paper')}", key="replay_tutorial", use_container_width=True):
         reset_tutorial()
         st.rerun()
 
