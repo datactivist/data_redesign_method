@@ -14,8 +14,6 @@ This service follows the contract defined in:
 Feature: 008-datagouv-mcp
 """
 
-import sys
-from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional, List, Tuple
@@ -25,12 +23,8 @@ import logging
 # Import NL query engine for natural language understanding
 from intuitiveness.data_sources.nl_query import NLQueryEngine, NLQueryResult
 
-# Add the skill library to path for import
-_SKILL_LIB_PATH = Path(__file__).parent.parent.parent / "skills" / "data-gouv" / "lib"
-if str(_SKILL_LIB_PATH) not in sys.path:
-    sys.path.insert(0, str(_SKILL_LIB_PATH))
-
-from datagouv import DataGouvAPI
+# Import DataGouvAPI from local copy
+from intuitiveness.services.datagouv_api import DataGouvAPI
 
 logger = logging.getLogger(__name__)
 
