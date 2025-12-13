@@ -341,7 +341,7 @@ def render_search_bar(show_hero: bool = True) -> Optional[str]:
             </div>
             <div class="landing-content">
                 <h1 class="minimal-headline">
-                    Redesign <span class="accent">any data</span> for your intent
+                    {t("search_headline")}
                 </h1>
             </div>
         </div>
@@ -352,13 +352,13 @@ def render_search_bar(show_hero: bool = True) -> Optional[str]:
     with col_search:
         with st.form(key="datagouv_search_form", clear_on_submit=False):
             query = st.text_input(
-                label="Search datasets",
-                placeholder="Search French open data...",
+                label=t("search_datasets_label"),
+                placeholder=t("search_placeholder"),
                 key="datagouv_search_input",
                 label_visibility="collapsed",
             )
             submitted = st.form_submit_button(
-                "Search",
+                t("search_button"),
                 use_container_width=True,
                 type="primary",
             )
@@ -573,7 +573,7 @@ def render_dataset_card(
         if dataset.description:
             st.markdown(f"<div style='font-size: 0.85rem; color: {COLORS['text_secondary']}; margin: 8px 0;'>{dataset.description}</div>", unsafe_allow_html=True)
         else:
-            st.markdown(f"<div style='font-size: 0.85rem; color: {COLORS['text_muted']}; font-style: italic;'>No description available</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 0.85rem; color: {COLORS['text_muted']}; font-style: italic;'>{t('no_description_available')}</div>", unsafe_allow_html=True)
 
         # Metadata row
         st.markdown(f"<div style='font-size: 0.75rem; color: {COLORS['text_muted']}; margin-top: 8px;'>📦 {org} · 📅 {date_str}</div>", unsafe_allow_html=True)
@@ -581,21 +581,21 @@ def render_dataset_card(
         # Action button
         if dataset.has_csv:
             if st.button(
-                "➕ Add to selection",
+                f"➕ {t('add_to_selection')}",
                 key=f"add_{card_idx}_{dataset.id}",
                 use_container_width=True,
                 type="primary",
             ):
-                with st.spinner("Loading…"):
+                with st.spinner(t("loading")):
                     result = _load_dataset_csv(service, dataset)
                     if result:
                         _add_to_basket(dataset.title, result[1], len(result[0]))
                         return result
                     else:
-                        st.error("Failed to load.")
+                        st.error(t("failed_to_load"))
         else:
             st.button(
-                "No CSV available",
+                t("no_csv"),
                 key=f"no_csv_{card_idx}_{dataset.id}",
                 use_container_width=True,
                 disabled=True,
@@ -651,7 +651,7 @@ def render_basket_sidebar() -> bool:
             letter-spacing: 0.05em;
             margin-bottom: 10px;
         ">
-            📦 Selected ({len(loaded)})
+            📦 {t("selected")} ({len(loaded)})
         </div>
     """, unsafe_allow_html=True)
 
@@ -679,11 +679,11 @@ def render_basket_sidebar() -> bool:
     st.markdown("</div>", unsafe_allow_html=True)
 
     # Continue button
-    if st.button("✅ Continue", type="primary", use_container_width=True, key="basket_continue"):
+    if st.button(f"✅ {t('continue_button')}", type="primary", use_container_width=True, key="basket_continue"):
         return True
 
     # Clear basket link
-    if st.button("🗑️ Clear all", use_container_width=True, key="basket_clear"):
+    if st.button(f"🗑️ {t('clear_all')}", use_container_width=True, key="basket_clear"):
         st.session_state.datagouv_loaded_datasets = {}
         st.rerun()
 
@@ -730,10 +730,10 @@ def render_no_results(query: str) -> None:
     <div class="content-card" style="text-align: center; padding: 48px 24px;">
         <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
         <p style="color: {COLORS['text_primary']}; font-size: 1.1rem; margin-bottom: 8px;">
-            No datasets found for "<strong style="color: {COLORS['accent']};">{query}</strong>"
+            {t("no_datasets_found")} "<strong style="color: {COLORS['accent']};">{query}</strong>"
         </p>
         <p style="color: {COLORS['text_muted']}; font-size: 0.9rem;">
-            Try different keywords or a broader search term.
+            {t("try_different_keywords")}
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -785,7 +785,7 @@ def render_search_interface() -> Optional[pd.DataFrame]:
     if submitted_query:
         st.session_state[SESSION_KEYS["query"]] = submitted_query
 
-        with st.spinner("Searching data.gouv.fr..."):
+        with st.spinner(t("searching")):
             try:
                 results = service.search(submitted_query, page=1, page_size=10)
                 st.session_state[SESSION_KEYS["results"]] = results
@@ -799,7 +799,7 @@ def render_search_interface() -> Optional[pd.DataFrame]:
                     st.session_state["datagouv_nl_keywords"] = None
 
             except DataGouvAPIError:
-                st.session_state[SESSION_KEYS["error"]] = "Search failed. Please try again."
+                st.session_state[SESSION_KEYS["error"]] = t("search_failed")
                 st.session_state[SESSION_KEYS["results"]] = None
 
         st.rerun()
@@ -815,9 +815,9 @@ def render_search_interface() -> Optional[pd.DataFrame]:
             nl_keywords = st.session_state.get("datagouv_nl_keywords")
             if nl_keywords:
                 keywords_display = ", ".join(nl_keywords[:4])
-                st.success(f"**{results.total} datasets found** — Keywords: _{keywords_display}_")
+                st.success(f"**{t('datasets_found', count=results.total)}** — {t('keywords_used', keywords=keywords_display)}")
             else:
-                st.success(f"**{results.total} datasets found** — Click to add to selection")
+                st.success(f"**{t('datasets_found', count=results.total)}** — {t('click_to_add')}")
 
             # Render dataset cards with direct load
             result = render_dataset_grid(results.datasets, service)
@@ -830,9 +830,9 @@ def render_search_interface() -> Optional[pd.DataFrame]:
 
             # Load more button
             if results.has_more:
-                if st.button("Load more results", use_container_width=True):
+                if st.button(t("load_more"), use_container_width=True):
                     current_page = st.session_state.get(SESSION_KEYS["page"], 1)
-                    with st.spinner("Loading more..."):
+                    with st.spinner(t("loading_more")):
                         try:
                             more_results = service.search(
                                 st.session_state.get(SESSION_KEYS["query"], ""),
@@ -846,7 +846,7 @@ def render_search_interface() -> Optional[pd.DataFrame]:
                                 current_results.page = more_results.page
                             st.session_state[SESSION_KEYS["page"]] = current_page + 1
                         except DataGouvAPIError:
-                            st.error("Failed to load more results.")
+                            st.error(t("failed_load_more"))
 
                     st.rerun()
 

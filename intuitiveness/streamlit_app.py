@@ -489,7 +489,7 @@ def _get_sidebar_branding_html() -> str:
         </div>
         <div class="brand-text">
             <span class="brand-name">Intuitiveness</span>
-            <span class="brand-tagline">The next stage of open data</span>
+            <span class="brand-tagline">""" + t("brand_tagline") + """</span>
         </div>
     </div>
     """
@@ -593,9 +593,9 @@ def render_progress_bar():
 
     # Simple container with background
     with st.container():
-        st.markdown("""
+        st.markdown(f"""
         <div style="background:linear-gradient(180deg,#f0f9ff,#e0f2fe);padding:12px 16px;border-radius:8px;margin-bottom:16px;border:1px solid #bae6fd;">
-        <div style="font-size:11px;color:#0369a1;font-weight:600;margin-bottom:8px;">DESCENT PROGRESS (L4 → L0)</div>
+        <div style="font-size:11px;color:#0369a1;font-weight:600;margin-bottom:8px;">{t("descent_progress")}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -628,9 +628,9 @@ def render_ascent_progress_bar():
 
     # Simple container with amber background
     with st.container():
-        st.markdown("""
+        st.markdown(f"""
         <div style="background:linear-gradient(180deg,#fffbeb,#fef3c7);padding:12px 16px;border-radius:8px;margin-bottom:16px;border:1px solid #fde68a;">
-        <div style="font-size:11px;color:#b45309;font-weight:600;margin-bottom:8px;">ASCENT PROGRESS (L0 → L3)</div>
+        <div style="font-size:11px;color:#b45309;font-weight:600;margin-bottom:8px;">{t("ascent_progress")}</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -831,7 +831,7 @@ def render_vertical_progress_sidebar():
         ascent_level = st.session_state.get('ascent_level', 0)
         current_transition = get_ascent_transition(ascent_level)
         mode_class = "ascent"
-        mode_label = "ASCENT"
+        mode_label = t("ascent_mode_label")
         # In ascent, transitions are ordered from L0 (bottom) to L3 (top)
         # Visually: index 0 = bottom, index 3 = top
         # So we need to render in reverse order (3, 2, 1, 0) for top-to-bottom HTML
@@ -841,7 +841,7 @@ def render_vertical_progress_sidebar():
         current_step = st.session_state.get('current_step', 0)
         current_transition = get_descent_transition(current_step)
         mode_class = "descent"
-        mode_label = "DESCENT"
+        mode_label = t("descent_mode_label")
         # In descent, transitions are ordered from L4 (top) to L0/Datum (bottom)
         # 🧶 L4, 🔗 L3, 📋 L2, 📐 L1, 🎯 L0
         transitions = [(0, "🧶"), (1, "🔗"), (2, "📋"), (3, "📐"), (4, "🎯")]
@@ -1174,13 +1174,13 @@ def render_upload_step(skip_header: bool = False):
                         relationships=relationships
                     )
 
-                    st.success("Configuration complete! Moving to next step...")
+                    st.success(t("configuration_complete"))
                     st.session_state.current_step = 2  # Skip to step 2 (graph building)
                     st.rerun()
 
             # Option to reset wizard
-            with st.expander("🔄 Start Over"):
-                if st.button("Reset and Re-analyze", key="upload_reset_wizard"):
+            with st.expander(f"🔄 {t('reset_analyze')}"):
+                if st.button(t("reset_analyze"), key="upload_reset_wizard"):
                     st.session_state[SESSION_KEY_DISCOVERY_RESULTS] = None
                     _set_wizard_step(1)
                     keys_to_clear = [k for k in st.session_state.keys()
@@ -1191,8 +1191,8 @@ def render_upload_step(skip_header: bool = False):
 
         else:
             # Fallback: No entities found, continue with manual mode
-            st.warning("Could not automatically analyze your files. Please continue manually.")
-            if st.button("Continue →", type="primary"):
+            st.warning(t("could_not_analyze"))
+            if st.button(t("continue_arrow"), type="primary"):
                 st.session_state.current_step = 1
                 st.rerun()
     else:
@@ -1434,11 +1434,11 @@ def render_entities_step():
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("← Back"):
+                if st.button(t("back_arrow")):
                     st.session_state.current_step = 0
                     st.rerun()
             with col2:
-                if st.button("Continue →", type="primary"):
+                if st.button(t("continue_arrow"), type="primary"):
                     st.session_state.current_step = 2
                     st.rerun()
 
@@ -1450,8 +1450,8 @@ def render_domains_step():
 
     # Check if L3 dataset exists
     if 'l3' not in st.session_state.datasets:
-        st.warning("No connected view available yet. Please complete the previous step first.")
-        if st.button("← Back to L4→L3"):
+        st.warning(t("no_connected_view"))
+        if st.button(t("back_arrow")):
             st.session_state.current_step = 1
             st.rerun()
         return
@@ -1605,9 +1605,9 @@ def render_domains_step():
 
     domains_list = [d.strip() for d in domains_input.split(",") if d.strip()]
 
-    if domains_list and st.button("🔄 Categorize Data", type="primary"):
+    if domains_list and st.button(f"🔄 {t('categorize_data')}", type="primary"):
         # Progress bar is shown inside categorize_by_domains via get_batch_similarities
-        st.info("Categorizing data by domains...")
+        st.info(t("categorizing_data"))
         # Use selected_table_name (defined from selected table or first entity type)
         categorize_by_domains(domains_list, use_semantic, threshold, column=selected_column, entity_type=selected_table_name)
         st.session_state.answers['domains'] = domains_input
@@ -1622,11 +1622,11 @@ def render_domains_step():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("← Back"):
+            if st.button(t("back_arrow")):
                 st.session_state.current_step = 1
                 st.rerun()
         with col2:
-            if st.button("Continue →", type="primary"):
+            if st.button(t("continue_arrow"), type="primary"):
                 st.session_state.current_step = 3
                 st.rerun()
 
@@ -1636,10 +1636,10 @@ def render_features_step():
     step = STEPS[3]
     render_step_header(step)
 
-    st.markdown("Select a **column** to extract from your categorized data.")
+    st.markdown(t("select_column_extract"))
 
     if 'l2' not in st.session_state.datasets:
-        st.warning("No categorized data available. Please complete the previous step.")
+        st.warning(t("no_categorized_data"))
         return
 
     # Show L2 domain tables using shared display (003-level-dataviz-display FR-008, FR-009)
@@ -1660,17 +1660,17 @@ def render_features_step():
             break
 
     if not available_columns:
-        st.warning("No columns available in domain tables.")
+        st.warning(t("no_columns_available"))
         return
 
-    st.subheader("🎯 Select Column to Extract")
+    st.subheader(f"🎯 {t('select_column')}")
     selected_column = st.selectbox(
-        "Select column to extract:",
+        t("select_column"),
         options=available_columns,
         index=available_columns.index('name') if 'name' in available_columns else 0
     )
 
-    if st.button("Extract Values"):
+    if st.button(t("extract_values")):
         extract_features(selected_column)
         st.session_state.answers['feature'] = selected_column
 
@@ -1684,11 +1684,11 @@ def render_features_step():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("← Back"):
+            if st.button(t("back_arrow")):
                 st.session_state.current_step = 2
                 st.rerun()
         with col2:
-            if st.button("Continue →", type="primary"):
+            if st.button(t("continue_arrow"), type="primary"):
                 st.session_state.current_step = 4
                 st.rerun()
 
@@ -1698,7 +1698,7 @@ def render_aggregation_step():
     step = STEPS[4]
     render_step_header(step)
 
-    st.markdown("Choose how to **calculate** a final result from your values.")
+    st.markdown(t("choose_calculation"))
 
     # Show L1 vectors first (what we're aggregating from)
     if 'l1' in st.session_state.datasets:
@@ -1712,13 +1712,13 @@ def render_aggregation_step():
     st.divider()
 
     aggregation = st.selectbox(
-        "Select calculation method:",
+        t("select_aggregation"),
         options=["count", "sum", "mean", "min", "max"],
         index=0,
-        help="This calculates your final result"
+        help=t("choose_calculation")
     )
 
-    if st.button("Compute Metrics"):
+    if st.button(t("compute_metrics")):
         compute_atomic_metrics(aggregation)
         st.session_state.answers['aggregation'] = aggregation
 
@@ -1734,11 +1734,11 @@ def render_aggregation_step():
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("← Back"):
+            if st.button(t("back_arrow")):
                 st.session_state.current_step = 3
                 st.rerun()
         with col2:
-            if st.button("View Results →", type="primary"):
+            if st.button(f"{t('view_results')} →", type="primary"):
                 st.session_state.current_step = 5
                 st.rerun()
 
@@ -1748,7 +1748,7 @@ def render_results_step():
     step = STEPS[5]
     render_step_header(step)
 
-    st.success("🎉 Descent complete! Here are your results:")
+    st.success(f"🎉 {t('descent_complete')}")
 
     # Summary metrics
     col1, col2, col3 = st.columns(3)
@@ -1803,12 +1803,12 @@ def render_results_step():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🔄 Start New Analysis"):
+        if st.button(f"🔄 {t('start_new_analysis')}"):
             reset_workflow()
             st.rerun()
 
     with col2:
-        if st.button("🚀 Start Redesign (Ascent)", type="primary"):
+        if st.button(f"🚀 {t('start_redesign_ascent')}", type="primary"):
             # Build session graph from descent results and switch to ascent mode
             session_data = build_session_graph_from_descent()
             if session_data:
@@ -1823,7 +1823,7 @@ def render_results_step():
                 st.session_state._switch_to_ascent = True
                 st.rerun()
             else:
-                st.error("Cannot start redesign - descent data incomplete")
+                st.error(t("cannot_start_redesign"))
 
 
 # ============================================================================
@@ -3242,7 +3242,7 @@ def render_loaded_graph_view():
     # ASCENT STEP 1: L0 → L1 (Source Recovery) - Spec Step 9
     # ========================================================================
     if st.session_state.ascent_level == 0:
-        st.subheader("🚀 Step 7 // Étape 7: Recover Source Values // Récupérer les valeurs sources (L0 → L1)")
+        st.subheader(f"🚀 {t('step_7_recover')}")
         st.info(
             "Your L0 ground truth anchors the analysis. Now recover the source values "
             "to explore different analytical dimensions.\n\n"
@@ -3254,19 +3254,19 @@ def render_loaded_graph_view():
         if graph:
             l1_df = graph.get_level_data(1)
             if l1_df is not None and not l1_df.empty:
-                st.metric("Source Values Available // Valeurs sources disponibles", f"{len(l1_df)} rows")
+                st.metric(t("source_values_available"), f"{len(l1_df)} {t('rows_label')}")
 
-                with st.expander("Preview L1 Data // Aperçu des données L1 (first 10 rows)", expanded=False):
+                with st.expander(t("preview_l1_data"), expanded=False):
                     st.dataframe(l1_df.head(10))
 
-                if st.button("📈 Recover Source Values // Récupérer les valeurs", type="primary", key="ascent_l0_l1"):
+                if st.button(f"📈 {t('recover_source_values_btn')}", type="primary", key="ascent_l0_l1"):
                     st.session_state.ascent_l1_data = l1_df
                     st.session_state.ascent_level = 1
                     st.rerun()
             else:
-                st.warning("⚠️ L1 data not found in session graph // Données L1 non trouvées")
+                st.warning(f"⚠️ {t('l1_not_found_warning')}")
         else:
-            st.error("Session graph not available // Graphe de session non disponible")
+            st.error(t("session_graph_unavailable"))
 
     # ========================================================================
     # ASCENT STEP 2: L1 → L2 (New Categorization) - Spec Step 10
@@ -3274,23 +3274,16 @@ def render_loaded_graph_view():
     # ========================================================================
     elif st.session_state.ascent_level == 1:
         # Back button
-        if st.button("⬅️ Retour à l'étape 9", key="ascent_back_to_9"):
+        if st.button(f"⬅️ {t('back_to_step_9')}", key="ascent_back_to_9"):
             st.session_state.ascent_level = 0
             st.rerun()
 
-        st.subheader("📊 Step 8 // Étape 8: Add new dimension // Ajouter une nouvelle dimension (L1 → L2)")
+        st.subheader(f"📊 {t('step_8_add_dimension')}")
         l1_df = st.session_state.ascent_l1_data
 
-        st.metric("Current L1 Values // Valeurs L1 actuelles", f"{len(l1_df)} rows")
+        st.metric(t("current_l1_values"), f"{len(l1_df)} {t('rows_label')}")
 
-        st.info(
-            "Define categories to organize your L1 values. You can:\n"
-            "1. Enter custom categories manually, OR\n"
-            "2. **Use unique values from a column** as categories directly\n\n"
-            "Définissez des catégories pour organiser vos valeurs L1. Vous pouvez:\n"
-            "1. Entrer des catégories manuellement, OU\n"
-            "2. **Utiliser les valeurs uniques d'une colonne** comme catégories"
-        )
+        st.info(t("ascent_categorize_info"))
 
         # Get L3 data for additional columns if available
         l3_df = graph.get_level_data(3) if graph else None
@@ -3343,13 +3336,13 @@ def render_loaded_graph_view():
                 with st.expander(f"Sample values in '{actual_column}' column ({unique_count} unique)"):
                     st.write(list(unique_values[:20]))
         else:
-            st.error("No suitable columns found for categorization // Aucune colonne appropriée trouvée")
+            st.error(t("no_suitable_columns"))
             return
 
         st.divider()
 
         # Category input (same as Step 3)
-        st.markdown("**Enter the categories you want to group by // Entrez les catégories:**")
+        st.markdown(f"**{t('enter_categories')}**")
 
         with st.expander("💡 Examples"):
             st.markdown("""
@@ -3488,11 +3481,11 @@ def render_loaded_graph_view():
     # ========================================================================
     elif st.session_state.ascent_level == 2:
         # Back button
-        if st.button("⬅️ Retour à l'étape 10", key="ascent_back_to_10"):
+        if st.button(f"⬅️ {t('back_to_step_10')}", key="ascent_back_to_10"):
             st.session_state.ascent_level = 1
             st.rerun()
 
-        st.subheader("🔗 Step 9 // Étape 9: Enrich with linkage keys // Enrichir avec une clé de liaison (L2 → L3)")
+        st.subheader(f"🔗 {t('step_9_linkage')}")
         l2_df = st.session_state.ascent_l2_data
 
         # Show current L2 state - find the category column
@@ -3505,36 +3498,32 @@ def render_loaded_graph_view():
 
         if category_col:
             categories = l2_df[category_col].value_counts().to_dict()
-            st.metric("L2 Categories // Catégories L2", f"{len(categories)} categories")
+            st.metric("L2 Categories", f"{len(categories)} categories")
             st.markdown(f"**Dimension: {category_col}**")
             for cat, count in categories.items():
-                st.write(f"  - **{cat}**: {count} rows")
+                st.write(f"  - **{cat}**: {count} {t('rows_label')}")
         else:
-            st.warning("No category column found in L2 data // Aucune colonne de catégorie trouvée dans L2")
+            st.warning(t("no_category_column"))
 
         # Show Commune location if present
         if 'Commune' in l2_df.columns:
-            st.info(f"📍 Location data: {l2_df['Commune'].nunique()} unique Communes // Données de localisation: {l2_df['Commune'].nunique()} Communes uniques")
+            st.info(f"📍 {l2_df['Commune'].nunique()} unique Communes")
 
         # Show L2 dataframe prominently (user feedback 2025-12-12)
-        st.markdown("**📊 Current L2 Table // Tableau L2 actuel:**")
+        st.markdown(f"**📊 {t('current_l2_table')}**")
         st.dataframe(l2_df, use_container_width=True, height=300)
 
         st.divider()
 
-        # Bilingual explanation of what linkage keys are
-        st.markdown("""
+        # Explanation of what linkage keys are
+        st.markdown(f"""
         ---
-        **🔗 What are linkage keys? // Qu'est-ce qu'une clé de liaison?**
+        **🔗 {t('what_are_linkage_keys')}**
 
-        Linkage keys are columns that enable your enriched dataset to connect with external data sources.
-        For example:
-        - **Postal codes** can link to demographic data // **Codes postaux** pour lier aux données démographiques
-        - **Commune names** can link to geographic/administrative data // **Noms de communes** pour lier aux données administratives
-        - **UAI codes** (education) can link to official school databases // **Codes UAI** pour lier aux bases officielles de l'éducation
-
-        Choose columns that contain **unique identifiers** useful for your analysis.
-        Choisissez des colonnes contenant des **identifiants uniques** utiles pour votre analyse.
+        {t('linkage_keys_description')}
+        - {t('postal_codes_link')}
+        - {t('commune_names_link')}
+        - {t('uai_codes_link')}
         ---
         """)
 
@@ -3553,38 +3542,38 @@ def render_loaded_graph_view():
                     if any(key in col_lower for key in ['postal', 'code', 'commune', 'cp', 'département', 'region', 'uai', 'objet']):
                         linkage_candidates.append(col)
 
-        st.markdown(f"**Available columns from original datasets // Colonnes disponibles:** {len(available_columns)} columns")
+        st.markdown(f"**{t('available_columns_from_datasets', count=len(available_columns))}**")
 
         # Show linkage key selection with improved UX
         if linkage_candidates:
-            st.markdown("**🔗 Select Linkage Key Column(s) // Sélectionner les colonnes de liaison:**")
-            st.caption("These columns were auto-detected as potential identifiers. You can modify this selection. // Ces colonnes ont été détectées comme identifiants potentiels. Vous pouvez modifier cette sélection.")
+            st.markdown(f"**🔗 {t('select_linkage_key_columns')}**")
+            st.caption(t("auto_detected_caption"))
             selected_linkage_cols = st.multiselect(
-                "Select columns to expose as linkage keys // Colonnes à exposer comme clés de liaison",
+                t("select_columns_linkage"),
                 options=linkage_candidates,
                 default=linkage_candidates[:3] if len(linkage_candidates) >= 3 else linkage_candidates,
                 key="ascent_linkage_cols",
-                help="These columns will be prominently displayed for future joins // Ces colonnes seront mises en évidence pour des jointures futures"
+                help=t("columns_for_joins_help")
             )
         else:
-            st.info("💡 No obvious linkage columns detected (postal, commune, code, UAI, etc.). You can select any column from the list below. // Aucune colonne de liaison évidente détectée. Vous pouvez sélectionner n'importe quelle colonne ci-dessous.")
+            st.info(f"💡 {t('no_linkage_detected')}")
             # Allow user to select any column as linkage key
             selected_linkage_cols = st.multiselect(
-                "Select columns to expose as linkage keys // Colonnes à exposer comme clés de liaison",
+                t("select_columns_linkage"),
                 options=available_columns,
                 default=[],
                 key="ascent_linkage_cols_fallback",
-                help="Choose columns that contain unique identifiers useful for your analysis // Choisissez des colonnes contenant des identifiants uniques"
+                help=t("choose_unique_identifiers_help")
             )
 
         # Show available columns preview
-        with st.expander(f"📋 All Available Columns from L3 ({len(available_columns)})", expanded=False):
+        with st.expander(f"📋 {t('all_available_columns', count=len(available_columns))}", expanded=False):
             col_cols = st.columns(3)
             for i, col in enumerate(sorted(available_columns)):
                 with col_cols[i % 3]:
                     st.text(col[:40] + "..." if len(col) > 40 else col)
 
-        if st.button("✨ Complete Enrichment", type="primary", key="ascent_l2_l3"):
+        if st.button(f"✨ {t('complete_enrichment')}", type="primary", key="ascent_l2_l3"):
             # Get L3 data from graph and merge with new categorization
             if graph:
                 l3_df = graph.get_level_data(3)
@@ -3604,7 +3593,7 @@ def render_loaded_graph_view():
                             l3_df[category_col] = l2_df[category_col].values
                         else:
                             # L2 is grouped data - need to broadcast based on original L3
-                            st.warning(f"Row count mismatch: L2={len(l2_df)}, L3={len(l3_df)}. Using L3 directly.")
+                            st.warning(t("row_count_mismatch", l2=len(l2_df), l3=len(l3_df)))
                             # For grouped ascent, just add the category column with a default
                             l3_df[category_col] = 'categorized'
 
@@ -3613,35 +3602,35 @@ def render_loaded_graph_view():
 
                     st.session_state.ascent_l3_data = l3_df
                     st.session_state.ascent_level = 3
-                    st.success(f"✅ Enriched L3 table: {len(l3_df)} rows, {len(l3_df.columns)} columns")
+                    st.success(f"✅ {t('enriched_l3_success', rows=len(l3_df), cols=len(l3_df.columns))}")
                     if selected_linkage_cols:
-                        st.info(f"🔗 Linkage keys selected: {', '.join(selected_linkage_cols)}")
+                        st.info(f"🔗 {t('linkage_keys_selected')}: {', '.join(selected_linkage_cols)}")
                     st.rerun()
                 else:
-                    st.error("L3 data not found in session graph")
+                    st.error(t("l3_data_not_found"))
             else:
-                st.error("Session graph not available")
+                st.error(t("session_graph_unavailable"))
 
     # ========================================================================
     # ASCENT COMPLETE: Show L3 Result - Spec Step 12
     # ========================================================================
     elif st.session_state.ascent_level == 3:
         # Back button
-        if st.button("⬅️ Retour à l'étape 11", key="ascent_back_to_11"):
+        if st.button(f"⬅️ {t('back_to_step_11')}", key="ascent_back_to_11"):
             st.session_state.ascent_level = 2
             st.rerun()
 
-        st.subheader("🎉 Step 10 // Étape 10: Final verification // Vérification finale - Ascent complete!")
+        st.subheader(f"🎉 {t('step_10_verification')} - {t('ascent_completed')}")
         l3_df = st.session_state.ascent_l3_data
         l2_df = st.session_state.get('ascent_l2_data')
 
-        st.success(f"**Enriched L3 Table // Tableau L3 enrichi**: {len(l3_df)} rows × {len(l3_df.columns)} columns")
+        st.success(f"**{t('enriched_l3_table')}**: {len(l3_df)} {t('rows_label')} × {len(l3_df.columns)} {t('columns_label')}")
 
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Rows // Lignes", len(l3_df))
+            st.metric(t("rows_metric"), len(l3_df))
         with col2:
-            st.metric("Columns // Colonnes", len(l3_df.columns))
+            st.metric(t("columns_metric"), len(l3_df.columns))
 
         # Show the new dimension column
         category_col = None
@@ -3651,17 +3640,17 @@ def render_loaded_graph_view():
                 break
 
         if category_col:
-            st.markdown(f"**New Dimension // Nouvelle dimension: {category_col}**")
+            st.markdown(f"**{t('new_dimension_label', column=category_col)}**")
             st.write(l3_df[category_col].value_counts().to_dict())
 
         # Show selected linkage keys prominently (from Step 11 selection)
         selected_linkage_cols = st.session_state.get('ascent_selected_linkage_cols', [])
         if selected_linkage_cols:
-            st.markdown("**🔗 Selected Linkage Keys // Clés de liaison sélectionnées:**")
+            st.markdown(f"**🔗 {t('selected_linkage_keys_label')}**")
             for col in selected_linkage_cols:
                 if col in l3_df.columns:
                     unique_count = l3_df[col].nunique()
-                    st.write(f"  - **{col}**: {unique_count} unique values")
+                    st.write(f"  - **{col}**: {t('unique_values_count', count=unique_count)}")
         else:
             # Fallback to auto-detected linkage keys
             linkage_cols = []
@@ -3670,16 +3659,16 @@ def render_loaded_graph_view():
                 if 'postal' in col_lower or 'commune' in col_lower or 'cp' == col_lower:
                     linkage_cols.append(col)
             if linkage_cols:
-                st.markdown("**🔗 Demographic Linkage Keys Available // Clés démographiques disponibles:**")
+                st.markdown(f"**🔗 {t('demographic_linkage_keys_label')}**")
                 for col in linkage_cols:
                     unique_count = l3_df[col].nunique() if col in l3_df.columns else 0
-                    st.write(f"  - **{col}**: {unique_count} unique values")
+                    st.write(f"  - **{col}**: {t('unique_values_count', count=unique_count)}")
 
         st.divider()
 
         # Build simplified view: L2 columns + selected linkage columns only (user feedback 2025-12-12)
-        st.markdown("**📊 Simplified L3 View // Vue L3 simplifiée (L2 + linkage columns):**")
-        st.caption("Showing only L2 columns + selected linkage keys // Affichage des colonnes L2 + clés de liaison sélectionnées uniquement")
+        st.markdown(f"**📊 {t('simplified_l3_view')}**")
+        st.caption(t("simplified_l3_caption"))
 
         # Determine columns to show in simplified view
         simplified_cols = []
@@ -3695,27 +3684,27 @@ def render_loaded_graph_view():
             simplified_cols_available = [c for c in simplified_cols if c in l3_df.columns]
             simplified_df = l3_df[simplified_cols_available]
             st.dataframe(simplified_df, use_container_width=True, height=400)
-            st.caption(f"Showing {len(simplified_cols_available)} columns of {len(l3_df.columns)} total")
+            st.caption(t("showing_columns_of_total", count=len(simplified_cols_available), total=len(l3_df.columns)))
         else:
             # Fallback to full L3 if no L2 data
             st.dataframe(l3_df.head(20), use_container_width=True, height=400)
 
-        with st.expander(f"📋 Full L3 Table ({len(l3_df.columns)} columns)", expanded=False):
+        with st.expander(f"📋 {t('full_l3_table', count=len(l3_df.columns))}", expanded=False):
             st.dataframe(l3_df)
 
-        with st.expander("All Columns // Toutes les colonnes", expanded=False):
+        with st.expander(t("all_columns"), expanded=False):
             st.write(list(l3_df.columns))
 
         # Export ascent artifacts
         st.markdown("---")
-        st.subheader("📥 Export Ascent Artifacts")
+        st.subheader(f"📥 {t('export_ascent_artifacts')}")
         export_col1, export_col2, export_col3 = st.columns(3)
 
         with export_col1:
             if st.session_state.get('ascent_l1_data') is not None:
                 l1_csv_bytes = st.session_state.ascent_l1_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="📥 Download L1 Values",
+                    label=f"📥 {t('download_l1_values')}",
                     data=l1_csv_bytes,
                     file_name="ascent_L1_values.csv",
                     mime="text/csv",
@@ -3727,7 +3716,7 @@ def render_loaded_graph_view():
             if st.session_state.get('ascent_l2_data') is not None:
                 l2_csv_bytes = st.session_state.ascent_l2_data.to_csv(index=False).encode('utf-8')
                 st.download_button(
-                    label="📥 Download L2 Categorized",
+                    label=f"📥 {t('download_l2_categorized')}",
                     data=l2_csv_bytes,
                     file_name="ascent_L2_categorized.csv",
                     mime="text/csv",
@@ -3738,7 +3727,7 @@ def render_loaded_graph_view():
         with export_col3:
             l3_csv_bytes = l3_df.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Download L3 Enriched",
+                label=f"📥 {t('download_l3_enriched')}",
                 data=l3_csv_bytes,
                 file_name="ascent_L3_enriched.csv",
                 mime="text/csv",
@@ -3748,13 +3737,13 @@ def render_loaded_graph_view():
 
         # Continue exploration options (user feedback 2025-12-12)
         st.divider()
-        st.subheader("🚀 Continue Exploration // Continuer l'exploration")
-        st.info("You've completed the ascent! You can continue exploring with different dimensions or start fresh. // Ascension terminée! Vous pouvez continuer l'exploration avec d'autres dimensions ou recommencer.")
+        st.subheader(f"🚀 {t('continue_exploration')}")
+        st.info(t("ascent_complete_info"))
 
         continue_col1, continue_col2, continue_col3 = st.columns(3)
 
         with continue_col1:
-            if st.button("🔄 Try Different Dimension // Autre dimension", key="try_different_dimension", type="secondary"):
+            if st.button(f"🔄 {t('try_different_dimension')}", key="try_different_dimension", type="secondary"):
                 # Go back to L1→L2 to try a different categorization
                 st.session_state.ascent_level = 1
                 st.session_state.ascent_l2_data = None
@@ -3762,14 +3751,14 @@ def render_loaded_graph_view():
                 st.rerun()
 
         with continue_col2:
-            if st.button("🔗 Try Different Linkage // Autre liaison", key="try_different_linkage", type="secondary"):
+            if st.button(f"🔗 {t('try_different_linkage')}", key="try_different_linkage", type="secondary"):
                 # Go back to L2→L3 to try different linkage columns
                 st.session_state.ascent_level = 2
                 st.session_state.ascent_l3_data = None
                 st.rerun()
 
         with continue_col3:
-            if st.button("🔄 Start New Ascent // Nouvelle ascension", key="reset_ascent"):
+            if st.button(f"🔄 {t('start_new_ascent')}", key="reset_ascent"):
                 st.session_state.ascent_level = 0
                 st.session_state.ascent_l1_data = None
                 st.session_state.ascent_l2_data = None
