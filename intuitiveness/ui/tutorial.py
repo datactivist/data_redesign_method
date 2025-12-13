@@ -113,16 +113,6 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
-    # Debug info (collapsible)
-    with st.expander("Debug Info", expanded=False):
-        st.code(f"""
-PAPER_PATH: {PAPER_PATH}
-Exists: {PAPER_PATH.exists()}
-CWD: {Path.cwd()}
-__file__: {Path(__file__)}
-File size: {PAPER_PATH.stat().st_size if PAPER_PATH.exists() else 'N/A'} bytes
-        """)
-
     # GitHub raw URL for the PDF
     GITHUB_PDF_URL = "https://raw.githubusercontent.com/ArthurSrz/intuitiveness/main/scientific_article/Intuitiveness.pdf"
 
