@@ -1,0 +1,241 @@
+# Internal API Contract: Data Scientist Co-Pilot
+# Feature: 010-quality-ds-workflow
+# Date: 2025-12-13
+
+# Note: These are internal Python function contracts, not REST APIs
+# Using YAML format for readability and tooling compatibility
+
+module: intuitiveness.quality.benchmark
+version: "1.0.0"
+description: Synthetic data validation and benchmarking
+
+functions:
+
+  benchmark_synthetic:
+    description: >
+      Benchmark synthetic data quality by training on synthetic and testing on real data.
+      Returns transfer gap metrics for multiple models.
+    parameters:
+      df:
+        type: pd.DataFrame
+        required: true
+        description: Original dataset
+      target_column:
+        type: str
+        required: true
+        description: Name of target column for supervised learning
+      n_synthetic:
+        type: int
+        required: false
+        default: null
+        description: Number of synthetic samples (default: match original size)
+      models:
+        type: List[str]
+        required: false
+        default: ["LogisticRegression", "RandomForest", "XGBoost"]
+        description: Models to benchmark
+      class_balanced:
+        type: bool
+        required: false
+        default: false
+        description: Generate balanced synthetic data across classes
+    returns:
+      type: SyntheticBenchmarkReport
+      description: Complete benchmark results with recommendation
+    raises:
+      - ValueError: If target_column not in DataFrame
+      - ValueError: If dataset has fewer than 50 rows
+    performance:
+      target: "<30 seconds for 5000 rows"
+
+  generate_balanced_synthetic:
+    description: >
+      Generate synthetic data with equal samples per class.
+    parameters:
+      df:
+        type: pd.DataFrame
+        required: true
+        description: Original dataset
+      target_column:
+        type: str
+        required: true
+        description: Name of target column
+      samples_per_class:
+        type: int
+        required: false
+        default: null
+        description: Samples per class (default: max class size)
+    returns:
+      type: pd.DataFrame
+      description: Balanced dataset (original + synthetic)
+
+---
+
+module: intuitiveness.quality.exporter
+version: "1.0.0"
+description: Dataset export and code generation
+
+functions:
+
+  export_dataset:
+    description: >
+      Export transformed dataset in specified format with metadata.
+    parameters:
+      df:
+        type: pd.DataFrame
+        required: true
+        description: Dataset to export
+      format:
+        type: str
+        required: false
+        default: "csv"
+        description: Export format (csv, pickle, parquet)
+      dataset_name:
+        type: str
+        required: false
+        default: "dataset"
+        description: Name for exported file
+      transformation_log:
+        type: TransformationLog
+        required: false
+        default: null
+        description: Log of applied transformations
+    returns:
+      type: ExportPackage
+      description: Export package with data and metadata
+
+  generate_python_snippet:
+    description: >
+      Generate Python code snippet for loading exported data.
+    parameters:
+      filename:
+        type: str
+        required: true
+        description: Name of exported file
+      target_column:
+        type: str
+        required: false
+        default: "target"
+        description: Target column name
+      format:
+        type: str
+        required: false
+        default: "csv"
+        description: File format
+    returns:
+      type: str
+      description: Python code snippet
+
+---
+
+module: intuitiveness.quality.assessor
+version: "1.1.0"  # Extends existing
+description: Extended quality assessment with batch transformations
+
+functions:
+
+  apply_all_suggestions:
+    description: >
+      Apply all suggestions with accuracy tracking.
+    parameters:
+      df:
+        type: pd.DataFrame
+        required: true
+        description: Dataset to transform
+      suggestions:
+        type: List[FeatureSuggestion]
+        required: true
+        description: Suggestions to apply
+      target_column:
+        type: str
+        required: false
+        default: null
+        description: Target column for accuracy tracking
+    returns:
+      type: Tuple[pd.DataFrame, TransformationLog]
+      description: Transformed dataset and transformation log
+    performance:
+      target: "<5 seconds for 10 suggestions"
+
+  get_readiness_indicator:
+    description: >
+      Get traffic light readiness indicator from usability score.
+    parameters:
+      score:
+        type: float
+        required: true
+        description: Usability score (0-100)
+      n_suggestions:
+        type: int
+        required: false
+        default: 0
+        description: Number of available suggestions
+      estimated_improvement:
+        type: float
+        required: false
+        default: 0.0
+        description: Estimated score improvement if all suggestions applied
+    returns:
+      type: ReadinessIndicator
+      description: Traffic light indicator with messaging
+
+---
+
+module: intuitiveness.ui.quality_dashboard
+version: "2.0.0"  # Major update
+description: Quality dashboard UI components
+
+components:
+
+  render_readiness_indicator:
+    description: Display traffic light readiness indicator
+    inputs:
+      - ReadinessIndicator
+    outputs:
+      - Streamlit markdown/HTML component
+    styling:
+      green: "#22c55e"
+      yellow: "#eab308"
+      red: "#ef4444"
+
+  render_apply_all_button:
+    description: One-click apply all suggestions button
+    inputs:
+      - List[FeatureSuggestion]
+      - Optional[str] target_column
+    outputs:
+      - Button component
+      - On click: TransformationLog
+    state:
+      - SESSION_KEY_TRANSFORMED_DF
+      - SESSION_KEY_TRANSFORMATION_LOG
+
+  render_export_section:
+    description: Export controls with format selection and code snippet
+    inputs:
+      - pd.DataFrame
+      - Optional[TransformationLog]
+      - Optional[QualityReport]
+    outputs:
+      - Format selector (CSV/Pickle/Parquet)
+      - Download button
+      - Python code snippet (copyable)
+
+  render_benchmark_section:
+    description: Synthetic validation benchmark UI
+    inputs:
+      - pd.DataFrame
+      - str target_column
+    outputs:
+      - Generate synthetic button
+      - Validate button
+      - Benchmark results display
+      - Recommendation indicator
+
+  render_before_after_comparison:
+    description: Before/after accuracy comparison display
+    inputs:
+      - TransformationLog
+    outputs:
+      - Accuracy comparison chart
+      - Per-transformation breakdown table
