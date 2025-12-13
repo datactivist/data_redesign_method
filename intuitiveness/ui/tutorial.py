@@ -97,18 +97,13 @@ def show_tutorial_dialog():
         text-align: center;
         margin-bottom: 1rem;
     }
-    .paper-header h3 {
-        color: #002fa7;
-        margin: 0;
-    }
     .paper-header p {
         color: #64748b;
-        font-size: 0.9rem;
-        margin: 0.5rem 0 0 0;
+        font-size: 0.95rem;
+        margin: 0;
     }
     </style>
     <div class="paper-header">
-        <h3>Sarazin & Mourey Research Paper</h3>
         <p>Understanding the methodology behind intuitive data redesign</p>
     </div>
     """, unsafe_allow_html=True)
