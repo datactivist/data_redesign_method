@@ -112,10 +112,25 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
+    # Debug info (collapsible)
+    with st.expander("Debug Info", expanded=False):
+        st.code(f"""
+PAPER_PATH: {PAPER_PATH}
+Exists: {PAPER_PATH.exists()}
+CWD: {Path.cwd()}
+__file__: {Path(__file__)}
+File size: {PAPER_PATH.stat().st_size if PAPER_PATH.exists() else 'N/A'} bytes
+        """)
+
     # Load and display PDF
     if PAPER_PATH.exists():
-        pdf_bytes = PAPER_PATH.read_bytes()
-        pdf_viewer(pdf_bytes, height=500)
+        try:
+            pdf_bytes = PAPER_PATH.read_bytes()
+            st.caption(f"Loaded {len(pdf_bytes)} bytes")
+            pdf_viewer(pdf_bytes, height=500)
+        except Exception as e:
+            st.error(f"Error loading PDF: {e}")
+            st.exception(e)
     else:
         st.error(f"Paper not found. Looking in: {PAPER_PATH}")
         st.caption(f"Current working directory: {Path.cwd()}")
