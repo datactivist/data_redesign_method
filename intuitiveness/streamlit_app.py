@@ -87,6 +87,7 @@ from intuitiveness.ui import (
     render_tutorial_replay_button,
     is_tutorial_completed,
     mark_tutorial_completed,
+    reset_tutorial,
 )
 from intuitiveness.persistence import (
     SessionStore,
@@ -108,6 +109,14 @@ from intuitiveness.neo4j_writer import (
 )
 from intuitiveness.neo4j_client import Neo4jClient
 from intuitiveness.styles import inject_all_styles
+from intuitiveness.styles.charts import (
+    styled_bar_chart,
+    styled_metric_card,
+    render_plotly_chart,
+    render_metrics_row,
+    KLEIN_BLUE,
+    CHART_COLORS,
+)
 import csv
 import io
 
@@ -887,11 +896,9 @@ def render_vertical_progress_sidebar():
 
 
 def render_step_header(step: dict):
-    """Render the header for a step."""
-    st.header(f"{step['title']}")
-    st.caption(f"Step {st.session_state.current_step + 1} of {len(STEPS)} | {step['level']}")
-    st.markdown(f"**{step['description']}**")
-    st.divider()
+    """Render the header for a step - disabled for clean SaaS design."""
+    # Headers removed for minimal design (007-streamlit-design-makeup)
+    pass
 
 
 def render_methodology_intro():
@@ -1463,28 +1470,21 @@ def render_domains_step():
     # ========== Show Graph Data with Tabs ==========
     st.subheader("📊 Browse Your Connected Information")
 
-    # Constitution v1.2.0: Use domain-friendly labels
+    # Constitution v1.2.0: Use domain-friendly labels - simplified (007-streamlit-design-makeup)
     st.markdown("""
     Votre jeu de données lié est prêt. Parcourez les données ci-dessous pour vérifier la qualité du matching.
-
-    **Cliquez sur "Utiliser ces données"** pour passer à la catégorisation.
     """)
 
-    # Use shared render function with graph for combined table and enable selection
-    selected_table = render_entity_relationship_tabs(
+    # Use shared render function - no selection button needed (007-streamlit-design-makeup)
+    render_entity_relationship_tabs(
         entity_tabs_data,
         relationship_tabs_data,
         graph=graph,
         max_rows=50,
         show_summary=True,
-        enable_selection=True,
+        enable_selection=False,
         selection_key_prefix="domains_step"
     )
-
-    # Handle table selection
-    if selected_table:
-        st.session_state['selected_table_for_categorization'] = selected_table
-        st.success(f"Selected: **{selected_table['table_name']}** ({len(selected_table['dataframe'])} rows)")
 
     # Build entities_by_type dict for backward compatibility with domain categorization
     entities_by_type = {
@@ -1492,31 +1492,21 @@ def render_domains_step():
         for tab in entity_tabs_data
     }
 
-    # Determine which dataframe to use for categorization
+    # Use the first entity type's data directly (simplified - 007-streamlit-design-makeup)
     entity_type_names = [tab.entity_type for tab in entity_tabs_data]
+    first_entity_type = entity_type_names[0] if entity_type_names else None
 
-    # Check if a table was selected, otherwise use the first entity type
-    if 'selected_table_for_categorization' in st.session_state:
-        selected = st.session_state['selected_table_for_categorization']
-        graph_df = selected['dataframe']
-        selected_table_name = selected['table_name']
+    # Get DataFrame from graph or entity tabs
+    if isinstance(graph, pd.DataFrame):
+        graph_df = graph
     else:
-        first_entity_type = entity_type_names[0] if entity_type_names else None
         graph_df = pd.DataFrame(entities_by_type.get(first_entity_type, []))
-        selected_table_name = first_entity_type
+    selected_table_name = first_entity_type
 
     st.divider()
 
     # Column selection for domain categorization
     st.subheader("🎯 Define Categories")
-
-    if 'selected_table_for_categorization' in st.session_state:
-        st.info(f"Using selected table: **{selected_table_name}** ({len(graph_df)} rows)")
-    else:
-        st.markdown("""
-        No table selected yet. Click "Use this data" on a tab above,
-        or the system will use the first item type by default.
-        """)
 
     if graph_df.empty:
         st.warning(f"No data available for '{selected_table_name}'")
@@ -1538,13 +1528,38 @@ def render_domains_step():
             "Select column to categorize by:",
             options=text_columns,
             index=text_columns.index(default_col) if default_col in text_columns else 0,
-            help="The values in this column will be matched against your domains"
+            help="The values in this column will be matched against your domains",
+            key="domains_column_select"
         )
 
-        # Show unique values in selected column
-        unique_values = graph_df[selected_column].dropna().unique()[:20]
-        with st.expander(f"Sample values in '{selected_column}' column ({len(graph_df[selected_column].dropna().unique())} unique)"):
-            st.write(list(unique_values))
+        # Show unique values and "Use as categories" quick option (same as ascent phase)
+        unique_values = graph_df[selected_column].dropna().unique()
+        unique_count = len(unique_values)
+
+        # Quick action: Use unique values as categories - DETERMINISTIC (007-streamlit-design-makeup)
+        if unique_count <= 20:
+            st.markdown(f"**🎯 Quick option: Use `{selected_column}` unique values as categories ({unique_count} categories):**")
+            st.caption(f"Unique values: {', '.join(str(v) for v in unique_values[:10])}{'...' if unique_count > 10 else ''}")
+            if st.button(f"✨ Use '{selected_column}' values as categories", key="domains_use_unique_values"):
+                # Apply deterministic categorization directly (exact match, no semantic)
+                categories_list = [str(v) for v in unique_values]
+                categorize_by_domains(
+                    categories_list,
+                    use_semantic=False,  # Deterministic - exact match
+                    threshold=0.0,
+                    column=selected_column,
+                    entity_type=selected_table_name
+                )
+                st.session_state.answers['domains'] = ", ".join(categories_list)
+                st.session_state.answers['domain_column'] = selected_column
+                st.session_state.answers['entity_type'] = selected_table_name
+                st.success(f"Categorized by {unique_count} unique values from '{selected_column}' (exact match)")
+                st.rerun()
+        else:
+            st.warning(f"Column '{selected_column}' has {unique_count} unique values (too many for automatic categories). Enter custom categories below.")
+
+        with st.expander(f"Sample values in '{selected_column}' column ({unique_count} unique)"):
+            st.write(list(unique_values[:20]))
     else:
         st.error("No suitable columns found for categorization")
         return
@@ -1561,10 +1576,11 @@ def render_domains_step():
         - **Departments:** `Sales, Marketing, Operations`
         """)
 
-    default_domains = "Revenue, Volume, ETP"
+    # Use stored categories if set via quick option, otherwise default
+    default_domains = st.session_state.answers.get('domains', "Revenue, Volume, ETP")
     domains_input = st.text_input(
         "Categories (comma-separated):",
-        value=st.session_state.answers.get('domains', default_domains),
+        value=default_domains,
         help="E.g., Revenue, Volume, ETP"
     )
 
@@ -2539,26 +2555,24 @@ def compute_atomic_metrics(aggregation: str):
 
 
 def render_atomic_metrics_view():
-    """Render the atomic metrics visualization."""
+    """Render the atomic metrics visualization with stylish Klein Blue design."""
     if 'l0' not in st.session_state.datasets:
         st.info("No atomic metrics computed yet")
         return
 
-    import matplotlib.pyplot as plt
-
     domains = list(st.session_state.datasets['l0'].keys())
     values = [l0.get_data() for l0 in st.session_state.datasets['l0'].values()]
 
-    fig, ax = plt.subplots(figsize=(8, 4))
-    bars = ax.bar(domains, values, color=['#E74C3C', '#3498DB', '#2ECC71', '#F39C12'][:len(domains)])
-    ax.set_ylabel('Count')
-    ax.set_title('Atomic Metrics by Domain')
+    # Create stylish bar chart with Klein Blue palette
+    fig = styled_bar_chart(
+        data=dict(zip(domains, values)),
+        title="Atomic Metrics by Domain",
+        show_values=True,
+        height=350,
+    )
 
-    for bar, val in zip(bars, values):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
-                str(int(val)), ha='center', va='bottom', fontweight='bold')
-
-    st.pyplot(fig)
+    # Render with clean config (no toolbar)
+    render_plotly_chart(fig, key="metrics_chart")
 
 
 def render_knowledge_graph_view():
@@ -4767,10 +4781,13 @@ def main():
                 st.session_state.datasets['l4'] = Level4Dataset(raw_data)
                 st.session_state.datagouv_loaded_datasets = {}
 
-                if not is_tutorial_completed():
-                    st.session_state.show_tutorial = True
-                else:
-                    st.session_state.current_step = 1
+                # Go to upload step to show column selection wizard
+                # (upload step has the wizard when raw_data is set)
+                st.session_state.current_step = 0
+                # Initialize wizard to step 1 (column selection)
+                _set_wizard_step(1)
+                # Reset and show tutorial for new data session
+                reset_tutorial()  # Clears completion state and shows tutorial
                 st.rerun()
 
             # Mode toggle - Constitution v1.2.0: Use domain-friendly labels
@@ -4835,53 +4852,37 @@ def main():
         # Keep old name for backwards compatibility with render_upload_step
         is_search_landing = is_in_search_flow
 
-        # Check if we're showing the tutorial (after data loaded, before workflow)
-        is_tutorial_view = (
+        # Check if tutorial dialog should show (after data loaded, before workflow)
+        should_show_tutorial_dialog = (
             st.session_state.get('show_tutorial', False) and
             not is_tutorial_completed()
         )
 
-        # Only show main header if NOT on search landing and NOT showing tutorial
-        if not is_search_landing and not is_tutorial_view:
-            # Guided workflow - SaaS-style header (007-streamlit-design-makeup)
-            render_page_header(
-                title="Data Redesign Method",
-                subtitle=t('transform_data'),
-                show_accent=True
-            )
+        # Show tutorial dialog as overlay (007-streamlit-design-makeup, Phase 9)
+        # Dialog appears on top of underlying content
+        if should_show_tutorial_dialog:
+            render_tutorial()
 
-        # Tutorial view - Sarazin & Mourey method (007-streamlit-design-makeup, Phase 9)
-        if is_tutorial_view:
-            def on_tutorial_complete():
-                st.session_state.show_tutorial = False
-                st.session_state.current_step = 1  # Go to entities step
+        # Headers removed for minimal SaaS design (007-streamlit-design-makeup)
 
-            render_tutorial(on_complete=on_tutorial_complete)
+        # Render current step content (dialog overlays on top if active)
+        step_id = STEPS[st.session_state.current_step]['id']
 
-        # Render current step (only if not in tutorial)
-        elif not is_tutorial_view:
-            step_id = STEPS[st.session_state.current_step]['id']
-
-            if step_id == "upload":
-                render_upload_step(skip_header=is_search_landing)
-            elif step_id == "entities":
-                render_entities_step()
-            elif step_id == "domains":
-                render_domains_step()
-            elif step_id == "features":
-                render_features_step()
-            elif step_id == "aggregation":
-                render_aggregation_step()
-            elif step_id == "results":
-                render_results_step()
+        if step_id == "upload":
+            render_upload_step(skip_header=is_search_landing)
+        elif step_id == "entities":
+            render_entities_step()
+        elif step_id == "domains":
+            render_domains_step()
+        elif step_id == "features":
+            render_features_step()
+        elif step_id == "aggregation":
+            render_aggregation_step()
+        elif step_id == "results":
+            render_results_step()
 
     else:
-        # Free Exploration Mode - SaaS-style header (007-streamlit-design-makeup)
-        render_page_header(
-            title="Free Exploration",
-            subtitle="Navigate freely through your data. Use the exploration tree in the sidebar to revisit any previous step.",
-            show_accent=True
-        )
+        # Free Exploration Mode - headers removed for minimal design
 
         # Check for export view
         if st.session_state.nav_export:

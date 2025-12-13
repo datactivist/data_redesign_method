@@ -305,14 +305,17 @@ def render_entity_relationship_tabs(
     """
     selected_table = None
 
-    # Show summary - Constitution v1.2.0: Use domain-friendly labels
+    # Show summary - simplified for minimal design (007-streamlit-design-makeup)
+    # Skip summary for simple DataFrame cases - the tab label shows the count
     if show_summary:
         total_entities = sum(tab.entity_count for tab in entity_tabs)
         total_relationships = sum(tab.relationship_count for tab in relationship_tabs)
-        st.markdown(
-            f"**Found {total_entities:,} items across {len(entity_tabs)} categories, "
-            f"with {total_relationships:,} connections**"
-        )
+        # Only show summary if we have relationships or multiple entity types
+        if total_relationships > 0 or len(entity_tabs) > 1:
+            st.markdown(
+                f"**Found {total_entities:,} items across {len(entity_tabs)} categories, "
+                f"with {total_relationships:,} connections**"
+            )
 
     # Handle empty state (no connections)
     if not entity_tabs and not relationship_tabs:
@@ -322,38 +325,48 @@ def render_entity_relationship_tabs(
     # Create combined tables
     # Use explicit None check - DataFrames raise ValueError with "if df" truthiness check
     combined_all = create_combined_all_table(graph) if graph is not None else None
-    combined_entities = create_combined_entity_table(entity_tabs)
     combined_relationships = create_combined_relationship_table(relationship_tabs)
 
-    # Build tab labels with combined tables first
+    # Build tab labels
     tab_labels = []
     tab_data_list = []  # Track which data corresponds to which tab
 
-    # Add combined "All" tab first (items + connections as columns)
-    # Constitution v1.2.0: Use domain-friendly labels
-    if combined_all:
-        tab_labels.append(f"📊 All ({combined_all.count})")
+    # SIMPLE CASE: DataFrame with single entity type and no relationships
+    # Just show one "Data" tab - no redundant tabs (007-streamlit-design-makeup)
+    is_simple_dataframe = (
+        combined_all is not None and
+        combined_all.tab_type == "all_data" and
+        len(entity_tabs) == 1 and
+        entity_tabs[0].entity_type == "Data" and
+        not relationship_tabs
+    )
+
+    if is_simple_dataframe:
+        # Show single clean tab for DataFrame data
+        tab_labels.append(f"📊 Data ({combined_all.count})")
         tab_data_list.append(("all_combined", combined_all))
+    else:
+        # COMPLEX CASE: Graph with multiple entity types and relationships
+        # Add combined "All" tab first (items + connections as columns)
+        if combined_all:
+            tab_labels.append(f"📊 All ({combined_all.count})")
+            tab_data_list.append(("all_combined", combined_all))
 
-    # Add combined "All Items" tab (if we have items)
-    if combined_entities:
-        tab_labels.append(f"📦 All Items ({combined_entities.count})")
-        tab_data_list.append(("combined_entities", combined_entities))
+        # Add combined "All Connections" tab (if we have connections)
+        if combined_relationships:
+            tab_labels.append(f"🔗 All Connections ({combined_relationships.count})")
+            tab_data_list.append(("combined_relationships", combined_relationships))
 
-    # Add combined "All Connections" tab (if we have connections)
-    if combined_relationships:
-        tab_labels.append(f"🔗 All Connections ({combined_relationships.count})")
-        tab_data_list.append(("combined_relationships", combined_relationships))
+        # Add individual category tabs (only if multiple types)
+        if len(entity_tabs) > 1:
+            for entity_tab in entity_tabs:
+                tab_labels.append(f"📦 {entity_tab.entity_type} ({entity_tab.entity_count})")
+                tab_data_list.append(("entity", entity_tab))
 
-    # Add individual category tabs
-    for entity_tab in entity_tabs:
-        tab_labels.append(f"📦 {entity_tab.entity_type} ({entity_tab.entity_count})")
-        tab_data_list.append(("entity", entity_tab))
-
-    # Add individual connection tabs
-    for rel_tab in relationship_tabs:
-        tab_labels.append(f"🔗 {rel_tab.relationship_key} ({rel_tab.relationship_count})")
-        tab_data_list.append(("relationship", rel_tab))
+        # Add individual connection tabs
+        for rel_tab in relationship_tabs:
+            tab_labels.append(f"🔗 {rel_tab.relationship_key} ({rel_tab.relationship_count})")
+            tab_data_list.append(("relationship", rel_tab))
 
     if not tab_labels:
         st.info("No data to display.")

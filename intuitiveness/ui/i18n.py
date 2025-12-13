@@ -593,6 +593,131 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "Language",
         "fr": "Langue",
     },
+
+    # ============================================
+    # DATA.GOUV.FR SEARCH (Feature 008)
+    # ============================================
+    "search_tagline": {
+        "en": "Redesign any data for your intent",
+        "fr": "Redesignez toute donnee selon votre intention",
+    },
+    "search_placeholder": {
+        "en": "Search French open data...",
+        "fr": "Rechercher des donnees ouvertes francaises...",
+    },
+    "search_button": {
+        "en": "Search",
+        "fr": "Rechercher",
+    },
+    "searching": {
+        "en": "Searching data.gouv.fr...",
+        "fr": "Recherche sur data.gouv.fr...",
+    },
+    "no_results": {
+        "en": "No datasets found for '{query}'",
+        "fr": "Aucun jeu de donnees trouve pour '{query}'",
+    },
+    "loading_dataset": {
+        "en": "Loading dataset...",
+        "fr": "Chargement du jeu de donnees...",
+    },
+    "dataset_loaded": {
+        "en": "Dataset loaded! Starting redesign workflow.",
+        "fr": "Jeu de donnees charge! Demarrage du workflow de redesign.",
+    },
+    "api_error": {
+        "en": "Could not connect to data.gouv.fr. Please try uploading files instead.",
+        "fr": "Connexion a data.gouv.fr impossible. Veuillez essayer d'importer des fichiers.",
+    },
+    "dataset_by": {
+        "en": "by {org}",
+        "fr": "par {org}",
+    },
+    "last_updated": {
+        "en": "Updated {date}",
+        "fr": "Mis a jour le {date}",
+    },
+    "resources_count": {
+        "en": "{count} files available",
+        "fr": "{count} fichiers disponibles",
+    },
+    "select_resource": {
+        "en": "Select a file to load:",
+        "fr": "Selectionnez un fichier a charger:",
+    },
+    "load_csv": {
+        "en": "Load this CSV",
+        "fr": "Charger ce CSV",
+    },
+    "file_size": {
+        "en": "Size: {size}",
+        "fr": "Taille: {size}",
+    },
+    "no_csv_available": {
+        "en": "No CSV files available in this dataset",
+        "fr": "Aucun fichier CSV disponible dans ce jeu de donnees",
+    },
+    "or_upload_files": {
+        "en": "Or upload your own files:",
+        "fr": "Ou importez vos propres fichiers:",
+    },
+    "upload_option": {
+        "en": "Upload Files",
+        "fr": "Importer des fichiers",
+    },
+    "search_option": {
+        "en": "Search Open Data",
+        "fr": "Rechercher des donnees ouvertes",
+    },
+    "results_found": {
+        "en": "{count} datasets found",
+        "fr": "{count} jeux de donnees trouves",
+    },
+    "load_more": {
+        "en": "Load more results",
+        "fr": "Charger plus de resultats",
+    },
+    "try_different_query": {
+        "en": "Try a different search query or upload your own files below.",
+        "fr": "Essayez une autre recherche ou importez vos propres fichiers ci-dessous.",
+    },
+    "csv_available": {
+        "en": "CSV available",
+        "fr": "CSV disponible",
+    },
+    "no_csv": {
+        "en": "No CSV",
+        "fr": "Pas de CSV",
+    },
+    "large_file_warning": {
+        "en": "This file is large ({size}). Download may take a while.",
+        "fr": "Ce fichier est volumineux ({size}). Le telechargement peut prendre du temps.",
+    },
+    "download_failed": {
+        "en": "Could not download file. Please try again or choose another dataset.",
+        "fr": "Impossible de telecharger le fichier. Veuillez reessayer ou choisir un autre jeu de donnees.",
+    },
+    "retry_button": {
+        "en": "Retry",
+        "fr": "Reessayer",
+    },
+    # Multi-dataset loading (008-datagouv-search)
+    "datasets_loaded": {
+        "en": "{count} dataset(s) loaded",
+        "fr": "{count} jeu(x) de données chargé(s)",
+    },
+    "add_another_dataset": {
+        "en": "Add another dataset",
+        "fr": "Ajouter un autre jeu de données",
+    },
+    "continue_with_datasets": {
+        "en": "Continue with datasets",
+        "fr": "Continuer avec les données",
+    },
+    "search_more_datasets": {
+        "en": "Search for more datasets:",
+        "fr": "Rechercher d'autres jeux de données:",
+    },
 }
 
 

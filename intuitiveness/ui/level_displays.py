@@ -216,35 +216,54 @@ def render_l0_datum(
     """
     Render L0 (Datum) display.
 
-    Displays a single atomic metric value prominently.
+    Displays a single atomic metric value prominently using the metric card component.
+    Updated for 007-streamlit-design-makeup with centralized design tokens.
 
     Args:
         value: The scalar value to display
         aggregation_method: How the value was computed (e.g., "average", "sum")
         source_info: Optional info about source (e.g., "Taux de réussite G from Revenue domain")
     """
-    # Constitution v1.2.0: Use domain-friendly labels
-    st.markdown("### 📊 Your Computed Result")
+    # Import colors from centralized palette
+    from intuitiveness.styles.palette import COLORS
 
-    # Display the value prominently
+    # Constitution v1.2.0: Use domain-friendly labels
+    st.markdown("### Your Computed Result")
+
+    # Display the value prominently using design system colors
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        # Build description from aggregation method and source
+        description = f"Calculated using: {aggregation_method}"
+        if source_info:
+            description += f" | {source_info}"
+
         st.markdown(
             f"""
             <div style="
                 text-align: center;
-                padding: 30px;
-                background-color: #f0f2f6;
-                border-radius: 10px;
-                margin: 20px 0;
+                padding: 2rem;
+                background: {COLORS["bg_elevated"]};
+                border-radius: 0.5rem;
+                border: 1px solid {COLORS["border"]};
+                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                margin: 1.5rem 0;
             ">
-                <div style="font-size: 48px; font-weight: bold; color: #1f77b4;">
+                <div style="
+                    font-size: 3rem;
+                    font-weight: 600;
+                    color: {COLORS["accent"]};
+                    line-height: 1.2;
+                ">
                     {value}
                 </div>
-                <div style="font-size: 14px; color: #666; margin-top: 10px;">
-                    Calculated using: {aggregation_method}
+                <div style="
+                    font-size: 0.875rem;
+                    color: {COLORS["text_secondary"]};
+                    margin-top: 0.75rem;
+                ">
+                    {description}
                 </div>
-                {f'<div style="font-size: 12px; color: #888; margin-top: 5px;">{source_info}</div>' if source_info else ''}
             </div>
             """,
             unsafe_allow_html=True
