@@ -109,21 +109,12 @@ def show_tutorial_dialog():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display PDF using base64 embedding (more reliable than Google Docs viewer)
+    # Display PDF using streamlit-extras pdf_viewer (works on Cloud)
     if PAPER_PATH.exists():
         pdf_bytes = PAPER_PATH.read_bytes()
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
 
-        pdf_display = f'''
-            <iframe
-                src="data:application/pdf;base64,{base64_pdf}"
-                width="100%"
-                height="600px"
-                style="border: 1px solid #e2e8f0; border-radius: 8px;"
-                type="application/pdf">
-            </iframe>
-        '''
-        st.markdown(pdf_display, unsafe_allow_html=True)
+        # Use streamlit-extras pdf_viewer for reliable rendering
+        pdf_viewer(pdf_bytes, width=700, height=600)
 
         # Download button
         st.download_button(
@@ -133,7 +124,10 @@ def show_tutorial_dialog():
             mime="application/pdf",
         )
     else:
-        st.warning(t("pdf_not_found"))
+        # Fallback: show link to GitHub
+        github_url = "https://github.com/ArthurSrz/intuitiveness/blob/main/scientific_article/Intuitiveness.pdf"
+        st.info(f"📄 [**{t('view_paper')}**]({github_url})")
+        st.caption(t("pdf_not_found"))
 
     st.markdown("")
 
