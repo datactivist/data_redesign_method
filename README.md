@@ -11,10 +11,6 @@
   <em>Dataset design and complexity</em>
 </p>
 
-<p align="center">
-  <img src="images/Intuitive_datasets_design_framework.png" alt="Intuitiveness Framework" width="600"/>
-</p>
-
 ---
 
 ## What is Intuitiveness?
