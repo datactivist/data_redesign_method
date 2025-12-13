@@ -2158,6 +2158,10 @@ TRANSLATIONS: Dict[str, Dict[str, str]] = {
         "en": "ASCENT",
         "fr": "ASCENSION",
     },
+    "pdf_not_found": {
+        "en": "PDF document not found. Please download it manually.",
+        "fr": "Document PDF introuvable. Veuillez le télécharger manuellement.",
+    },
 }
 
 
