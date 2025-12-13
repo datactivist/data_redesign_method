@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <strong>Transform chaotic datasets into intuitive answers</strong><br>
-  <em>The Sarazin & Mourey Data Redesign Method</em>
+  <strong>Intuitiveness as the next stage of open data</strong><br>
+  <em>Dataset design and complexity</em>
 </p>
 
 <p align="center">
