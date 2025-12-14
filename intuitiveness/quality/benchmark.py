@@ -521,6 +521,7 @@ def benchmark_synthetic(
         mean_transfer_gap=mean_gap,
         max_transfer_gap=max_gap,
         min_transfer_gap=min_gap,
+        transfer_gap_ci_95=ci_95,  # P1 FIX: Store CI for UI visualization
         recommendation=recommendation,
         recommendation_reason=recommendation_reason,
     )

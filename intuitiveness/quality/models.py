@@ -365,6 +365,8 @@ class SyntheticBenchmarkReport:
     mean_transfer_gap: float = 0.0
     max_transfer_gap: float = 0.0
     min_transfer_gap: float = 0.0
+    # P1 FIX (Dr. Metric Mind): Add CI field for visualization
+    transfer_gap_ci_95: float = 0.0  # 95% confidence interval on transfer gap
 
     # Recommendation
     recommendation: str = "not_recommended"  # 'safe_to_use' | 'use_with_caution' | 'not_recommended'
@@ -388,6 +390,7 @@ class SyntheticBenchmarkReport:
             "mean_transfer_gap": self.mean_transfer_gap,
             "max_transfer_gap": self.max_transfer_gap,
             "min_transfer_gap": self.min_transfer_gap,
+            "transfer_gap_ci_95": self.transfer_gap_ci_95,
             "recommendation": self.recommendation,
             "recommendation_reason": self.recommendation_reason,
             "is_safe": self.is_safe,
@@ -407,6 +410,7 @@ class SyntheticBenchmarkReport:
             mean_transfer_gap=data.get("mean_transfer_gap", 0.0),
             max_transfer_gap=data.get("max_transfer_gap", 0.0),
             min_transfer_gap=data.get("min_transfer_gap", 0.0),
+            transfer_gap_ci_95=data.get("transfer_gap_ci_95", 0.0),
             recommendation=data.get("recommendation", "not_recommended"),
             recommendation_reason=data.get("recommendation_reason", ""),
         )
