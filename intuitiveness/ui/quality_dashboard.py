@@ -333,8 +333,8 @@ def render_feature_suggestions(report) -> None:
                                 st.session_state[SESSION_KEY_APPLIED_SUGGESTIONS] = set()
                             st.session_state[SESSION_KEY_APPLIED_SUGGESTIONS].add(suggestion_key)
 
-                            # Clear the report to force re-assessment
-                            st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
+                            # UX FIX: Keep the report to stay on the same page
+                            # User can click "Re-assess with Changes" when ready
 
                             success(f"Applied suggestion: {suggestion.suggestion_type} on {', '.join(suggestion.target_features)}")
                             st.rerun()
@@ -499,8 +499,9 @@ def render_apply_all_button(report) -> None:
                 st.session_state[SESSION_KEY_TRANSFORMATION_LOG] = log
                 st.session_state[SESSION_KEY_QUALITY_DF] = transformed_df
 
-                # Clear old report to trigger re-assessment
-                st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
+                # UX FIX: Keep the report so user stays on the same page
+                # and can see before/after comparison below
+                # (Previously popped report which sent user back to upload screen)
 
                 success(
                     f"Applied {log.total_applied} transformations! "
@@ -607,7 +608,10 @@ def render_export_section(report) -> None:
     )
 
     # Get the current (possibly transformed) DataFrame
-    df = st.session_state.get(SESSION_KEY_TRANSFORMED_DF) or st.session_state.get(SESSION_KEY_QUALITY_DF)
+    # BUG FIX: Cannot use `or` with DataFrames (ambiguous truth value)
+    df = st.session_state.get(SESSION_KEY_TRANSFORMED_DF)
+    if df is None:
+        df = st.session_state.get(SESSION_KEY_QUALITY_DF)
     log = st.session_state.get(SESSION_KEY_TRANSFORMATION_LOG)
     file_name = st.session_state.get(SESSION_KEY_QUALITY_FILE_NAME, "dataset")
     dataset_name = Path(file_name).stem if file_name else "dataset"
