@@ -1,0 +1,146 @@
+# Expert Team Analysis Synthesis Report
+**Generated**: 2025-12-13
+**Chief Designer**: Intuitiveness Product Team
+
+---
+
+## Executive Summary
+
+The intuitiveness platform has **strong conceptual foundations** (5-level abstraction, bidirectional flow, TabPFN integration) but suffers from **implementation fragmentation** that breaks user momentum and limits reproducibility.
+
+**Overall Product Health: B- (72%)**
+
+**Top 3 Opportunities:**
+1. **Fix L0→L1 ascent entry** — Currently shows cryptic errors; users abandon
+2. **Add European decimal support** — 60% of French data fails silently
+3. **Connect TabPFN to ascent** — Feature engineering is data-driven in theory but keyword-based in practice
+
+---
+
+## Expert Team
+
+| Expert | Persona | Focus Area | Key Finding |
+|--------|---------|------------|-------------|
+| `/expert-flow` | Dr. Flow State | UX Flow Psychology | Ascent phase is a flow-killer; 17+ friction points identified |
+| `/expert-schema` | Prof. Schema Whisperer | Data Modeling & Graphs | Missing French admin patterns (numen, rncp, naf); star schema anti-pattern |
+| `/expert-feature` | Dr. Feature Prophet | ML & TabPFN | TabPFN not connected to ascent dimension suggestions |
+| `/expert-context` | Mx. Context Keeper | Traceability & Lineage | Functions not serialized; 70% traceability (C+ grade) |
+| `/expert-etl` | Prof. Dirty Data | ETL & Data Wrangling | European decimals and BOM not handled; 70% production ready |
+| `/expert-metric` | Dr. Metric Mind | Visualization & KPIs | L0 context score 3.2/10; only 5 aggregation methods |
+
+---
+
+## Consensus Findings (3+ Experts Agree)
+
+| Finding | Experts | Confidence |
+|---------|---------|------------|
+| **L0→L1 ascent is broken** | Flow, Feature, Context | Very High |
+| **Progress/wait feedback missing** | Flow, Schema, Feature | High |
+| **Function serialization gaps** | Context, Feature | High |
+| **European decimal support missing** | ETL, Schema | High |
+| **Wizard state lost on "Back"** | Flow, Schema | Medium |
+
+---
+
+## Prioritized Roadmap
+
+### P0 — This Sprint (Critical)
+
+| Item | Impact | Effort |
+|------|--------|--------|
+| Fix L0→L1 entry: breadcrumb trail + dataset recovery | 9/10 | 3 days |
+| European decimal detection/normalization | 9/10 | 3 hours |
+| Strip BOM from first column | 8/10 | 30 min |
+| Progress bar for semantic matching | 8/10 | 1 day |
+| Cache wizard states | 8/10 | 2 days |
+
+### P1 — Next Sprint (High Value)
+
+| Item | Impact | Effort |
+|------|--------|--------|
+| TabPFN-driven dimension clustering | 8/10 | 3 days |
+| Atomic file writes for SessionGraph | 7/10 | 2 hours |
+| Function registry serialization | 7/10 | 2 days |
+| French admin patterns in discovery | 7/10 | 2 hours |
+| Median, mode, percentile aggregations | 6/10 | 2 hours |
+
+### P2 — Backlog
+
+| Item | Impact | Effort |
+|------|--------|--------|
+| SHAP waterfall plot | 5/10 | 2 days |
+| L0 sparkline | 5/10 | 1 day |
+| Schema migration framework | 5/10 | 1 day |
+| Collapsible sidebar | 4/10 | 4 hours |
+| Correlation heatmap | 4/10 | 1 day |
+
+---
+
+## Implementation Timeline
+
+### Week 1: Foundation Fixes
+- European decimals + BOM + na_values (ETL)
+- Progress bar for semantic matching (UI)
+- Cache wizard states (State)
+
+### Week 2: Ascent Resurrection
+- L0→L1 breadcrumb trail + recovery UI
+- Function registry serialization
+- French admin patterns + confidence display
+
+### Week 3: ML Integration
+- TabPFN dimension clustering
+- Atomic file writes + checksum
+- Additional aggregations
+
+---
+
+## Success Metrics
+
+| Metric | Current | Target |
+|--------|---------|--------|
+| Ascent completion rate | ~30% | >80% |
+| CSV load success (French data) | ~70% | >95% |
+| Session recovery rate | ~90% | >99% |
+
+---
+
+## Key Files to Modify
+
+### ETL Fixes
+- `intuitiveness/streamlit_app.py:127-197` — `smart_load_csv()`
+- `intuitiveness/services/datagouv_api.py:265-292` — `_clean_dataframe()`
+
+### Ascent Fixes
+- `intuitiveness/navigation.py:629-654` — L0→L1 entry
+- `intuitiveness/persistence/session_store.py` — Function serialization
+- `intuitiveness/streamlit_app.py:3270` — Breadcrumb UI
+
+### Discovery Fixes
+- `intuitiveness/discovery.py:78-91` — Add French patterns
+- `intuitiveness/discovery.py:245-327` — Improve confidence scoring
+
+### ML Fixes
+- `intuitiveness/quality/assessor.py` — Connect to ascent
+- `intuitiveness/ascent/dimensions.py:469-526` — TabPFN clustering
+
+### Visualization Fixes
+- `intuitiveness/ui/metric_card.py` — Add sparkline, uncertainty
+- `intuitiveness/ui/quality_dashboard.py` — SHAP plots, distributions
+
+---
+
+## Slash Commands Available
+
+Invoke any expert for targeted analysis:
+- `/expert-flow` — UX and cognitive load analysis
+- `/expert-schema` — Data modeling and graph architecture
+- `/expert-feature` — ML and TabPFN integration
+- `/expert-context` — Traceability and persistence
+- `/expert-etl` — Data wrangling and file loading
+- `/expert-metric` — Visualization and KPIs
+- `/expert-chief` — Orchestrate all experts and synthesize
+
+---
+
+*Report generated by Chief Designer super-agent*

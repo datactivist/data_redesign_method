@@ -1,0 +1,494 @@
+"""
+TabPFN Wrapper with Fallback Logic
+
+Provides a unified interface to TabPFN with automatic fallback:
+1. Primary: tabpfn-client (cloud API, no GPU required)
+2. Fallback: tabpfn local (requires GPU for optimal speed)
+
+Both versions implement sklearn-compatible interface.
+Includes timeout handling for graceful degradation.
+"""
+
+import logging
+import signal
+import functools
+import os
+from dataclasses import dataclass
+from typing import Optional, Literal, Tuple, Any, List
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+import numpy as np
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+# Environment variable to control backend preference
+# Set TABPFN_PREFER_LOCAL=1 to prefer local inference
+# Set TABPFN_PREFER_LOCAL=0 to prefer cloud API (default - faster on most machines)
+_PREFER_LOCAL_DEFAULT = os.environ.get("TABPFN_PREFER_LOCAL", "0") == "1"
+
+
+class TabPFNTimeoutError(Exception):
+    """Raised when TabPFN operation times out."""
+    pass
+
+
+def with_timeout(timeout_seconds: float):
+    """
+    Decorator to add timeout to a function.
+
+    Uses ThreadPoolExecutor for cross-platform compatibility.
+
+    Args:
+        timeout_seconds: Maximum execution time.
+
+    Returns:
+        Decorated function.
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    return future.result(timeout=timeout_seconds)
+                except FuturesTimeoutError:
+                    raise TabPFNTimeoutError(
+                        f"{func.__name__} timed out after {timeout_seconds}s"
+                    )
+        return wrapper
+    return decorator
+
+# Backend availability flags
+_TABPFN_CLIENT_AVAILABLE = False
+_TABPFN_LOCAL_AVAILABLE = False
+
+try:
+    from tabpfn_client import TabPFNClassifier as ClientClassifier
+    from tabpfn_client import TabPFNRegressor as ClientRegressor
+    import tabpfn_client
+    _TABPFN_CLIENT_AVAILABLE = True
+
+    # Auto-load token from stored file
+    from pathlib import Path
+    _token_file = Path.home() / ".tabpfn" / "token"
+    if _token_file.exists():
+        try:
+            _token = _token_file.read_text().strip()
+            tabpfn_client.set_access_token(_token)
+            logger.info("TabPFN token loaded from ~/.tabpfn/token")
+        except Exception as e:
+            logger.warning(f"Failed to load TabPFN token: {e}")
+except ImportError:
+    ClientClassifier = None
+    ClientRegressor = None
+
+try:
+    from tabpfn import TabPFNClassifier as LocalClassifier
+    from tabpfn import TabPFNRegressor as LocalRegressor
+    _TABPFN_LOCAL_AVAILABLE = True
+except ImportError:
+    LocalClassifier = None
+    LocalRegressor = None
+
+
+class TabPFNWrapper:
+    """
+    Unified TabPFN interface with automatic backend selection.
+
+    Tries tabpfn-client (cloud API) first, falls back to local tabpfn.
+    Implements sklearn-compatible fit/predict interface.
+
+    Attributes:
+        task_type: "classification" or "regression"
+        backend: Which backend is active ("client", "local", or None)
+        model: The underlying TabPFN model instance
+    """
+
+    def __init__(
+        self,
+        task_type: Literal["classification", "regression"] = "classification",
+        prefer_local: Optional[bool] = None,
+        timeout: float = 60.0,
+    ):
+        """
+        Initialize TabPFN wrapper.
+
+        Args:
+            task_type: Type of prediction task.
+            prefer_local: If True, try local TabPFN before cloud API.
+                         Defaults to TABPFN_PREFER_LOCAL env var (default: True).
+            timeout: Timeout in seconds for API calls.
+        """
+        self.task_type = task_type
+        self.prefer_local = prefer_local if prefer_local is not None else _PREFER_LOCAL_DEFAULT
+        self.timeout = timeout
+        self.backend: Optional[str] = None
+        self.model: Optional[Any] = None
+        self._fitted = False
+
+        self._initialize_backend()
+
+    def _initialize_backend(self) -> None:
+        """Initialize the appropriate TabPFN backend."""
+        if self.prefer_local:
+            backends = [("local", self._init_local), ("client", self._init_client)]
+        else:
+            backends = [("client", self._init_client), ("local", self._init_local)]
+
+        for name, init_fn in backends:
+            try:
+                if init_fn():
+                    self.backend = name
+                    logger.info(f"TabPFN initialized with {name} backend")
+                    return
+            except Exception as e:
+                logger.warning(f"Failed to initialize {name} backend: {e}")
+
+        logger.error("No TabPFN backend available")
+        raise RuntimeError(
+            "No TabPFN backend available. Install tabpfn-client or tabpfn: "
+            "pip install tabpfn-client"
+        )
+
+    def _init_client(self) -> bool:
+        """Initialize tabpfn-client backend."""
+        if not _TABPFN_CLIENT_AVAILABLE:
+            return False
+
+        try:
+            if self.task_type == "classification":
+                self.model = ClientClassifier()
+            else:
+                self.model = ClientRegressor()
+            return True
+        except Exception as e:
+            logger.warning(f"tabpfn-client initialization failed: {e}")
+            return False
+
+    def _init_local(self) -> bool:
+        """Initialize local tabpfn backend."""
+        if not _TABPFN_LOCAL_AVAILABLE:
+            return False
+
+        try:
+            if self.task_type == "classification":
+                self.model = LocalClassifier()
+            else:
+                self.model = LocalRegressor()
+            return True
+        except Exception as e:
+            logger.warning(f"Local tabpfn initialization failed: {e}")
+            return False
+
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "TabPFNWrapper":
+        """
+        Fit the TabPFN model with timeout handling.
+
+        Args:
+            X: Training features (n_samples, n_features).
+            y: Training labels (n_samples,).
+
+        Returns:
+            self for method chaining.
+
+        Raises:
+            TabPFNTimeoutError: If fitting exceeds timeout.
+        """
+        if self.model is None:
+            raise RuntimeError("TabPFN backend not initialized")
+
+        # Convert pandas to numpy if needed
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
+
+        try:
+            self._fit_with_timeout(X, y)
+            self._fitted = True
+        except TabPFNTimeoutError:
+            logger.warning(f"TabPFN fit timed out after {self.timeout}s")
+            raise
+
+        return self
+
+    def _fit_with_timeout(self, X: np.ndarray, y: np.ndarray) -> None:
+        """Internal fit with timeout using ThreadPoolExecutor."""
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(self.model.fit, X, y)
+            try:
+                future.result(timeout=self.timeout)
+            except FuturesTimeoutError:
+                raise TabPFNTimeoutError(
+                    f"TabPFN fit timed out after {self.timeout}s"
+                )
+
+    def predict(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class labels or regression values.
+
+        Args:
+            X: Features to predict (n_samples, n_features).
+
+        Returns:
+            Predictions (n_samples,).
+        """
+        if not self._fitted:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        return self.model.predict(X)
+
+    def predict_proba(self, X: np.ndarray) -> np.ndarray:
+        """
+        Predict class probabilities (classification only).
+
+        Args:
+            X: Features to predict (n_samples, n_features).
+
+        Returns:
+            Class probabilities (n_samples, n_classes).
+        """
+        if not self._fitted:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        if self.task_type != "classification":
+            raise ValueError("predict_proba only available for classification")
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+
+        return self.model.predict_proba(X)
+
+    def score(self, X: np.ndarray, y: np.ndarray) -> float:
+        """
+        Compute prediction score.
+
+        Args:
+            X: Test features.
+            y: True labels.
+
+        Returns:
+            Accuracy for classification, R² for regression.
+        """
+        if not self._fitted:
+            raise RuntimeError("Model not fitted. Call fit() first.")
+
+        if isinstance(X, pd.DataFrame):
+            X = X.values
+        if isinstance(y, pd.Series):
+            y = y.values
+
+        return self.model.score(X, y)
+
+
+def get_tabpfn_model(
+    task_type: Literal["classification", "regression"] = "classification",
+    prefer_local: Optional[bool] = None,
+) -> TabPFNWrapper:
+    """
+    Factory function to get a TabPFN model wrapper.
+
+    Args:
+        task_type: Type of prediction task.
+        prefer_local: If True, prefer local TabPFN over cloud API.
+                     Defaults to TABPFN_PREFER_LOCAL env var (default: True).
+
+    Returns:
+        Configured TabPFNWrapper instance.
+    """
+    if prefer_local is None:
+        prefer_local = _PREFER_LOCAL_DEFAULT
+    return TabPFNWrapper(task_type=task_type, prefer_local=prefer_local)
+
+
+def is_tabpfn_available() -> Tuple[bool, str]:
+    """
+    Check if any TabPFN backend is available.
+
+    Returns:
+        Tuple of (available, backend_name).
+    """
+    if _TABPFN_CLIENT_AVAILABLE:
+        return True, "client"
+    if _TABPFN_LOCAL_AVAILABLE:
+        return True, "local"
+    return False, "none"
+
+
+@dataclass
+class APIConsumptionEstimate:
+    """Estimate of TabPFN API consumption for quality assessment.
+
+    TabPFN API cost formula per call:
+        api_cost = max((train_rows + test_rows) * n_cols * n_estimators, 5000)
+
+    Where n_estimators = 8 (TabPFN default).
+    """
+
+    # Dataset dimensions
+    n_rows: int
+    n_features: int
+    n_classes: int
+
+    # API call breakdown
+    cv_calls: int  # 5-fold cross-validation
+    feature_importance_calls: int  # Ablation study per feature
+    shap_calls: int  # SHAP/permutation importance
+    total_calls: int
+
+    # TabPFN API cost (using actual formula)
+    cost_per_cv_call: int  # max((train+test) * cols * 8, 5000)
+    cost_per_ablation_call: int  # max((train+test) * (cols-1) * 8, 5000)
+    total_cv_cost: int
+    total_feature_importance_cost: int
+    total_shap_cost: int
+    total_api_cost: int  # Total consumption units
+
+    # Data volume
+    total_cells: int  # rows × features
+
+    # Limits check (TabPFN optimal: ≤10,000 rows, ≤500 features, ≤10 classes)
+    within_row_limit: bool
+    within_feature_limit: bool
+    within_class_limit: bool
+    is_optimal: bool
+
+    # Warnings
+    warnings: List[str]
+
+    def summary(self) -> str:
+        """Human-readable summary of API consumption."""
+        lines = [
+            f"📊 **Dataset**: {self.n_rows:,} rows × {self.n_features} features",
+            f"🏷️ **Target classes**: {self.n_classes}",
+            f"",
+            f"**TabPFN API Cost Formula**: `max((train_rows + test_rows) × cols × 8, 5000)`",
+            f"",
+            f"**API Calls & Cost Breakdown:**",
+            f"  • Cross-validation (5-fold): {self.cv_calls} calls × {self.cost_per_cv_call:,} = **{self.total_cv_cost:,}**",
+            f"  • Feature importance ({self.n_features}+1 ablations × 3 folds): {self.feature_importance_calls} calls = **{self.total_feature_importance_cost:,}**",
+            f"  • SHAP analysis: ~{self.shap_calls} calls = **{self.total_shap_cost:,}**",
+            f"",
+            f"**Total API Cost**: ~{self.total_api_cost:,} units",
+        ]
+
+        if self.is_optimal:
+            lines.append(f"\n✅ Dataset is within TabPFN optimal limits")
+        else:
+            lines.append(f"\n⚠️ **Warnings:**")
+            for warning in self.warnings:
+                lines.append(f"  • {warning}")
+
+        return "\n".join(lines)
+
+
+def estimate_api_consumption(
+    n_rows: int,
+    n_features: int,
+    n_classes: int = 2,
+    cv_folds: int = 5,
+    importance_folds: int = 3,
+    n_estimators: int = 8,
+    task_type: Literal["classification", "regression", "auto"] = "auto",
+) -> APIConsumptionEstimate:
+    """
+    Estimate TabPFN API consumption before running quality assessment.
+
+    Uses the actual TabPFN API cost formula:
+        api_cost = max((num_train_rows + num_test_rows) * num_cols * n_estimators, 5000)
+
+    Args:
+        n_rows: Number of rows in dataset.
+        n_features: Number of feature columns.
+        n_classes: Number of unique target values (only relevant for classification).
+        cv_folds: Number of cross-validation folds (default: 5).
+        importance_folds: Number of folds for feature importance (default: 3).
+        n_estimators: TabPFN ensemble size (default: 8).
+        task_type: "classification", "regression", or "auto" (infers from n_classes).
+
+    Returns:
+        APIConsumptionEstimate with breakdown of expected API usage.
+    """
+    # Auto-detect task type if not specified
+    if task_type == "auto":
+        # If >20 unique values, likely regression
+        task_type = "regression" if n_classes > 20 else "classification"
+    # TabPFN API cost formula: max((train_rows + test_rows) * cols * n_estimators, 5000)
+    # In CV, train+test = all rows, so cost per call = max(n_rows * n_features * 8, 5000)
+
+    def tabpfn_cost(rows: int, cols: int) -> int:
+        """Calculate TabPFN API cost using official formula."""
+        return max(rows * cols * n_estimators, 5000)
+
+    # Calculate API calls
+    cv_calls = cv_folds  # One fit per fold
+
+    # Feature importance: (n_features + 1) ablation runs × importance_folds
+    # +1 for baseline (all features)
+    feature_importance_calls = (n_features + 1) * importance_folds
+
+    # SHAP/permutation importance: roughly n_features × 2 evaluations
+    shap_calls = n_features * 2
+
+    total_calls = cv_calls + feature_importance_calls + shap_calls
+
+    # Calculate costs using TabPFN formula
+    # CV: each fold uses all rows but train/test split doesn't change total
+    cost_per_cv_call = tabpfn_cost(n_rows, n_features)
+    total_cv_cost = cv_calls * cost_per_cv_call
+
+    # Feature importance ablation: each ablation removes 1 feature
+    # Average cost (some calls have n_features, baseline; some have n_features-1)
+    cost_per_ablation_call = tabpfn_cost(n_rows, max(n_features - 1, 1))
+    total_feature_importance_cost = feature_importance_calls * cost_per_ablation_call
+
+    # SHAP: similar to ablation
+    total_shap_cost = shap_calls * cost_per_ablation_call
+
+    # Total API cost
+    total_api_cost = total_cv_cost + total_feature_importance_cost + total_shap_cost
+
+    # Data volume
+    total_cells = n_rows * n_features
+
+    # Check TabPFN optimal limits
+    within_row_limit = n_rows <= 10000
+    within_feature_limit = n_features <= 500
+    # Class limit only applies to classification
+    within_class_limit = n_classes <= 10 if task_type == "classification" else True
+    is_optimal = within_row_limit and within_feature_limit and within_class_limit
+
+    # Generate warnings
+    warnings = []
+    if not within_row_limit:
+        warnings.append(f"Dataset has {n_rows:,} rows (TabPFN optimal: ≤10,000). Consider sampling.")
+    if not within_feature_limit:
+        warnings.append(f"Dataset has {n_features} features (TabPFN optimal: ≤500). Consider feature selection.")
+    # Only warn about classes for classification tasks
+    if task_type == "classification" and not within_class_limit:
+        warnings.append(f"Target has {n_classes} classes (TabPFN optimal: ≤10). Consider grouping rare classes.")
+
+    return APIConsumptionEstimate(
+        n_rows=n_rows,
+        n_features=n_features,
+        n_classes=n_classes,
+        cv_calls=cv_calls,
+        feature_importance_calls=feature_importance_calls,
+        shap_calls=shap_calls,
+        total_calls=total_calls,
+        cost_per_cv_call=cost_per_cv_call,
+        cost_per_ablation_call=cost_per_ablation_call,
+        total_cv_cost=total_cv_cost,
+        total_feature_importance_cost=total_feature_importance_cost,
+        total_shap_cost=total_shap_cost,
+        total_api_cost=total_api_cost,
+        total_cells=total_cells,
+        within_row_limit=within_row_limit,
+        within_feature_limit=within_feature_limit,
+        within_class_limit=within_class_limit,
+        is_optimal=is_optimal,
+        warnings=warnings,
+    )

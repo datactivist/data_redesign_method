@@ -1,8 +1,16 @@
 """
 Enrichment functions for ascending through abstraction levels.
 
+Phase 2.1 - Code Simplification (011-code-simplification)
+Refactored to support dependency injection while maintaining backward compatibility.
+
 EnrichmentFunction: Callable that transforms data from a lower level to a higher level.
 EnrichmentRegistry: Manages available enrichment functions and provides defaults.
+
+Spec Traceability:
+------------------
+- 002-ascent-functionality: Enrichment functions for L0→L1, L1→L2, L2→L3 transitions
+- contracts/enrichment-functions.md: Function specifications
 """
 
 from dataclasses import dataclass, field
@@ -55,26 +63,78 @@ class EnrichmentFunction:
 class EnrichmentRegistry:
     """
     Registry of available enrichment functions.
-    Provides defaults and allows custom registration.
+
+    Phase 2.1 (011-code-simplification): Supports both singleton access for
+    backward compatibility and fresh instances for testing/session isolation.
+
+    Usage:
+        # Singleton (backward compatible)
+        registry = EnrichmentRegistry.get_instance()
+
+        # Fresh instance (for testing or session isolation)
+        registry = EnrichmentRegistry(auto_register_defaults=True)
+
+        # Inject into function
+        def my_function(registry: EnrichmentRegistry = None):
+            registry = registry or EnrichmentRegistry.get_instance()
     """
 
     _instance: Optional['EnrichmentRegistry'] = None
+    _defaults_registered: bool = False
 
-    def __init__(self):
+    def __init__(self, auto_register_defaults: bool = False):
+        """
+        Initialize a new registry.
+
+        Args:
+            auto_register_defaults: If True, register default enrichment functions.
+                                   Set to True for fresh instances that need defaults.
+        """
         self._functions: Dict[str, EnrichmentFunction] = {}
         self._defaults: Dict[tuple, List[str]] = {}  # (source, target) -> list of default names
 
+        if auto_register_defaults:
+            self._register_builtin_defaults()
+
     @classmethod
     def get_instance(cls) -> 'EnrichmentRegistry':
-        """Get the singleton instance of the registry."""
+        """
+        Get the singleton instance of the registry.
+
+        The singleton is lazily initialized with default functions registered.
+        For fresh instances without singleton behavior, use the constructor directly.
+        """
         if cls._instance is None:
             cls._instance = cls()
+            # Register defaults on first access (lazy initialization)
+            if not cls._defaults_registered:
+                cls._instance._register_builtin_defaults()
+                cls._defaults_registered = True
         return cls._instance
 
     @classmethod
     def reset_instance(cls) -> None:
         """Reset the singleton instance (for testing)."""
         cls._instance = None
+        cls._defaults_registered = False
+
+    @classmethod
+    def create_fresh(cls, with_defaults: bool = True) -> 'EnrichmentRegistry':
+        """
+        Create a fresh registry instance (not singleton).
+
+        Use this for:
+        - Testing (isolated state)
+        - Per-session registries
+        - Custom configurations
+
+        Args:
+            with_defaults: Whether to register default functions
+
+        Returns:
+            New EnrichmentRegistry instance
+        """
+        return cls(auto_register_defaults=with_defaults)
 
     def register(self, func: EnrichmentFunction, is_default: bool = False) -> None:
         """
@@ -145,6 +205,45 @@ class EnrichmentRegistry:
         """List all registered functions."""
         return list(self._functions.values())
 
+    def _register_builtin_defaults(self) -> None:
+        """
+        Register all default enrichment functions.
+
+        Phase 2.1 (011-code-simplification): Instance method for DI support.
+        Called lazily on first get_instance() access or when creating fresh instances
+        with auto_register_defaults=True.
+        """
+        # L0 → L1 defaults
+        try:
+            self.register(
+                EnrichmentFunction(
+                    name='source_expansion',
+                    description='Re-expand to the original vector that was aggregated',
+                    source_level=ComplexityLevel.LEVEL_0,
+                    target_level=ComplexityLevel.LEVEL_1,
+                    func=_source_expansion,
+                    requires_context=True
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass  # Already registered
+
+        try:
+            self.register(
+                EnrichmentFunction(
+                    name='naming_signatures',
+                    description='Extract naming features (first word, word count, patterns) from each item',
+                    source_level=ComplexityLevel.LEVEL_0,
+                    target_level=ComplexityLevel.LEVEL_1,
+                    func=_naming_signatures,
+                    requires_context=True
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass  # Already registered
+
 
 # =============================================================================
 # Default Enrichment Functions for L0 → L1
@@ -214,44 +313,15 @@ def _vector_to_dataframe(series: pd.Series) -> pd.DataFrame:
 
 
 # =============================================================================
-# Register default functions
+# Backward compatibility (P2.1: Legacy standalone function)
 # =============================================================================
 
 def _register_defaults():
-    """Register all default enrichment functions."""
-    registry = EnrichmentRegistry.get_instance()
+    """
+    Legacy function for backward compatibility.
 
-    # L0 → L1 defaults
-    try:
-        registry.register(
-            EnrichmentFunction(
-                name='source_expansion',
-                description='Re-expand to the original vector that was aggregated',
-                source_level=ComplexityLevel.LEVEL_0,
-                target_level=ComplexityLevel.LEVEL_1,
-                func=_source_expansion,
-                requires_context=True
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass  # Already registered
-
-    try:
-        registry.register(
-            EnrichmentFunction(
-                name='naming_signatures',
-                description='Extract naming features (first word, word count, patterns) from each item',
-                source_level=ComplexityLevel.LEVEL_0,
-                target_level=ComplexityLevel.LEVEL_1,
-                func=_naming_signatures,
-                requires_context=True
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass  # Already registered
-
-
-# Auto-register defaults on module import
-_register_defaults()
+    Deprecated: Use EnrichmentRegistry.get_instance() which lazily registers defaults,
+    or EnrichmentRegistry.create_fresh(with_defaults=True) for isolated instances.
+    """
+    # get_instance() already handles registration via lazy initialization
+    EnrichmentRegistry.get_instance()

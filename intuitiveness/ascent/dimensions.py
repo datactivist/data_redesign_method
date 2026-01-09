@@ -1,8 +1,16 @@
 """
 Dimension definitions for ascending through abstraction levels.
 
+Phase 2.1 - Code Simplification (011-code-simplification)
+Refactored to support dependency injection while maintaining backward compatibility.
+
 DimensionDefinition: Specifies a categorical dimension to add during ascent.
 DimensionRegistry: Manages available dimensions and provides defaults.
+
+Spec Traceability:
+------------------
+- 002-ascent-functionality: Dimension classification for L1→L2, L2→L3 transitions
+- 004-ascent-precision: Domain categorization (business object, pattern type)
 """
 
 from dataclasses import dataclass
@@ -82,26 +90,78 @@ class DimensionDefinition:
 class DimensionRegistry:
     """
     Registry of available dimension definitions.
-    Provides defaults and allows custom registration.
+
+    Phase 2.1 (011-code-simplification): Supports both singleton access for
+    backward compatibility and fresh instances for testing/session isolation.
+
+    Usage:
+        # Singleton (backward compatible)
+        registry = DimensionRegistry.get_instance()
+
+        # Fresh instance (for testing or session isolation)
+        registry = DimensionRegistry(auto_register_defaults=True)
+
+        # Inject into function
+        def my_function(registry: DimensionRegistry = None):
+            registry = registry or DimensionRegistry.get_instance()
     """
 
     _instance: Optional['DimensionRegistry'] = None
+    _defaults_registered: bool = False
 
-    def __init__(self):
+    def __init__(self, auto_register_defaults: bool = False):
+        """
+        Initialize a new registry.
+
+        Args:
+            auto_register_defaults: If True, register default dimension definitions.
+                                   Set to True for fresh instances that need defaults.
+        """
         self._dimensions: Dict[str, DimensionDefinition] = {}
         self._defaults: Dict[tuple, List[str]] = {}  # (source, target) -> list of default names
 
+        if auto_register_defaults:
+            self._register_builtin_defaults()
+
     @classmethod
     def get_instance(cls) -> 'DimensionRegistry':
-        """Get the singleton instance of the registry."""
+        """
+        Get the singleton instance of the registry.
+
+        The singleton is lazily initialized with default dimensions registered.
+        For fresh instances without singleton behavior, use the constructor directly.
+        """
         if cls._instance is None:
             cls._instance = cls()
+            # Register defaults on first access (lazy initialization)
+            if not cls._defaults_registered:
+                cls._instance._register_builtin_defaults()
+                cls._defaults_registered = True
         return cls._instance
 
     @classmethod
     def reset_instance(cls) -> None:
         """Reset the singleton instance (for testing)."""
         cls._instance = None
+        cls._defaults_registered = False
+
+    @classmethod
+    def create_fresh(cls, with_defaults: bool = True) -> 'DimensionRegistry':
+        """
+        Create a fresh registry instance (not singleton).
+
+        Use this for:
+        - Testing (isolated state)
+        - Per-session registries
+        - Custom configurations
+
+        Args:
+            with_defaults: Whether to register default dimensions
+
+        Returns:
+            New DimensionRegistry instance
+        """
+        return cls(auto_register_defaults=with_defaults)
 
     def register(self, dimension: DimensionDefinition, is_default: bool = False) -> None:
         """
@@ -172,6 +232,76 @@ class DimensionRegistry:
     def list_all(self) -> List[DimensionDefinition]:
         """List all registered dimensions."""
         return list(self._dimensions.values())
+
+    def _register_builtin_defaults(self) -> None:
+        """
+        Register all default dimension definitions.
+
+        Phase 2.1 (011-code-simplification): Instance method for DI support.
+        Called lazily on first get_instance() access or when creating fresh instances
+        with auto_register_defaults=True.
+        """
+        # L1 → L2 defaults
+        try:
+            self.register(
+                DimensionDefinition(
+                    name='business_object',
+                    description='Classify by business object type (revenue, volume, ETP, other)',
+                    possible_values=['revenue', 'volume', 'ETP', 'other'],
+                    classifier=_classify_business_object,
+                    default_value='other',
+                    applicable_levels=[(ComplexityLevel.LEVEL_1, ComplexityLevel.LEVEL_2)]
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass
+
+        try:
+            self.register(
+                DimensionDefinition(
+                    name='pattern_type',
+                    description='Classify by naming pattern (aggregated, averaged, ratio, temporal, raw)',
+                    possible_values=['aggregated', 'averaged', 'ratio', 'temporal', 'raw'],
+                    classifier=_classify_pattern,
+                    default_value='raw',
+                    applicable_levels=[(ComplexityLevel.LEVEL_1, ComplexityLevel.LEVEL_2)]
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass
+
+        # L2 → L3 defaults
+        try:
+            self.register(
+                DimensionDefinition(
+                    name='client_segment',
+                    description='Classify by client segment (B2B, B2C, Government)',
+                    possible_values=['B2B', 'B2C', 'Government', 'Unknown'],
+                    classifier=_classify_client_segment,
+                    default_value='Unknown',
+                    applicable_levels=[(ComplexityLevel.LEVEL_2, ComplexityLevel.LEVEL_3)]
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass
+
+        try:
+            self.register(
+                DimensionDefinition(
+                    name='financial_view',
+                    description='Classify by financial perspective (Revenue, Cost, Margin)',
+                    possible_values=['Revenue', 'Cost', 'Margin', 'Unknown'],
+                    classifier=_classify_financial_view,
+                    default_value='Unknown',
+                    applicable_levels=[(ComplexityLevel.LEVEL_2, ComplexityLevel.LEVEL_3)]
+                ),
+                is_default=True
+            )
+        except ValueError:
+            pass
 
 
 # =============================================================================
@@ -265,74 +395,18 @@ def _classify_financial_view(item: Any) -> str:
 
 
 # =============================================================================
-# Register default dimensions
+# Backward compatibility (P2.1: Legacy standalone function)
 # =============================================================================
 
 def _register_defaults():
-    """Register all default dimension definitions."""
-    registry = DimensionRegistry.get_instance()
+    """
+    Legacy function for backward compatibility.
 
-    # L1 → L2 defaults
-    try:
-        registry.register(
-            DimensionDefinition(
-                name='business_object',
-                description='Classify by business object type (revenue, volume, ETP, other)',
-                possible_values=['revenue', 'volume', 'ETP', 'other'],
-                classifier=_classify_business_object,
-                default_value='other',
-                applicable_levels=[(ComplexityLevel.LEVEL_1, ComplexityLevel.LEVEL_2)]
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass
-
-    try:
-        registry.register(
-            DimensionDefinition(
-                name='pattern_type',
-                description='Classify by naming pattern (aggregated, averaged, ratio, temporal, raw)',
-                possible_values=['aggregated', 'averaged', 'ratio', 'temporal', 'raw'],
-                classifier=_classify_pattern,
-                default_value='raw',
-                applicable_levels=[(ComplexityLevel.LEVEL_1, ComplexityLevel.LEVEL_2)]
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass
-
-    # L2 → L3 defaults
-    try:
-        registry.register(
-            DimensionDefinition(
-                name='client_segment',
-                description='Classify by client segment (B2B, B2C, Government)',
-                possible_values=['B2B', 'B2C', 'Government', 'Unknown'],
-                classifier=_classify_client_segment,
-                default_value='Unknown',
-                applicable_levels=[(ComplexityLevel.LEVEL_2, ComplexityLevel.LEVEL_3)]
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass
-
-    try:
-        registry.register(
-            DimensionDefinition(
-                name='financial_view',
-                description='Classify by financial perspective (Revenue, Cost, Margin)',
-                possible_values=['Revenue', 'Cost', 'Margin', 'Unknown'],
-                classifier=_classify_financial_view,
-                default_value='Unknown',
-                applicable_levels=[(ComplexityLevel.LEVEL_2, ComplexityLevel.LEVEL_3)]
-            ),
-            is_default=True
-        )
-    except ValueError:
-        pass
+    Deprecated: Use DimensionRegistry.get_instance() which lazily registers defaults,
+    or DimensionRegistry.create_fresh(with_defaults=True) for isolated instances.
+    """
+    # get_instance() already handles registration via lazy initialization
+    DimensionRegistry.get_instance()
 
 
 # =============================================================================
@@ -724,5 +798,6 @@ def create_graph_from_relationships(
     return G
 
 
-# Auto-register defaults on module import
-_register_defaults()
+# P2.1: Removed auto-registration on module import
+# Defaults are now lazily registered on first get_instance() access
+# This improves testability and allows for isolated instances

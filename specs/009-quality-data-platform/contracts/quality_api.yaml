@@ -1,0 +1,610 @@
+# Quality Data Platform API Contract
+# Feature: 009-quality-data-platform
+# Note: This defines the internal Python API, not a REST API
+# The Streamlit app calls these functions directly
+
+openapi: 3.0.3
+info:
+  title: Quality Data Platform Internal API
+  version: 1.0.0
+  description: |
+    Internal Python API for the Quality Data Platform.
+    These are Python functions called by Streamlit UI components,
+    not HTTP endpoints.
+
+# Python Module Structure
+x-python-modules:
+  quality:
+    assessor:
+      - assess_dataset
+      - compute_usability_score
+    feature_engineer:
+      - suggest_features
+      - apply_suggestion
+    anomaly_detector:
+      - detect_anomalies
+      - explain_anomaly
+    synthetic_generator:
+      - generate_synthetic
+      - validate_synthetic
+  catalog:
+    storage:
+      - add_dataset
+      - get_dataset
+      - update_dataset
+      - delete_dataset
+    search:
+      - filter_datasets
+      - search_datasets
+
+paths:
+  # ============================================================
+  # QUALITY ASSESSMENT
+  # ============================================================
+  /quality/assess:
+    post:
+      operationId: assess_dataset
+      summary: Run quality assessment on a dataset
+      description: |
+        Python signature:
+        ```python
+        def assess_dataset(
+            df: pd.DataFrame,
+            target_column: str,
+            task_type: Literal["classification", "regression", "auto"] = "auto"
+        ) -> QualityReport
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dataframe
+                - target_column
+              properties:
+                dataframe:
+                  description: pandas DataFrame to assess
+                  type: object
+                target_column:
+                  type: string
+                  description: Column to use as prediction target
+                task_type:
+                  type: string
+                  enum: [classification, regression, auto]
+                  default: auto
+      responses:
+        '200':
+          description: Quality assessment complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualityReport'
+        '400':
+          description: Invalid input (too few rows, missing target, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ============================================================
+  # FEATURE ENGINEERING
+  # ============================================================
+  /quality/suggest-features:
+    post:
+      operationId: suggest_features
+      summary: Generate feature engineering suggestions
+      description: |
+        Python signature:
+        ```python
+        def suggest_features(
+            report: QualityReport,
+            max_suggestions: int = 10
+        ) -> List[FeatureSuggestion]
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - report
+              properties:
+                report:
+                  $ref: '#/components/schemas/QualityReport'
+                max_suggestions:
+                  type: integer
+                  default: 10
+      responses:
+        '200':
+          description: Feature suggestions generated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeatureSuggestion'
+
+  /quality/apply-suggestion:
+    post:
+      operationId: apply_suggestion
+      summary: Apply a feature engineering suggestion to a dataframe
+      description: |
+        Python signature:
+        ```python
+        def apply_suggestion(
+            df: pd.DataFrame,
+            suggestion: FeatureSuggestion
+        ) -> pd.DataFrame
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dataframe
+                - suggestion
+              properties:
+                dataframe:
+                  type: object
+                suggestion:
+                  $ref: '#/components/schemas/FeatureSuggestion'
+      responses:
+        '200':
+          description: Transformed dataframe
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Transformed pandas DataFrame
+
+  # ============================================================
+  # ANOMALY DETECTION
+  # ============================================================
+  /quality/detect-anomalies:
+    post:
+      operationId: detect_anomalies
+      summary: Detect anomalous rows using density estimation
+      description: |
+        Python signature:
+        ```python
+        def detect_anomalies(
+            df: pd.DataFrame,
+            percentile_threshold: float = 2.0
+        ) -> List[AnomalyRecord]
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dataframe
+              properties:
+                dataframe:
+                  type: object
+                percentile_threshold:
+                  type: number
+                  default: 2.0
+                  description: Flag rows below this percentile as anomalies
+      responses:
+        '200':
+          description: Anomalies detected
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnomalyRecord'
+
+  # ============================================================
+  # SYNTHETIC DATA GENERATION
+  # ============================================================
+  /quality/generate-synthetic:
+    post:
+      operationId: generate_synthetic
+      summary: Generate synthetic data samples
+      description: |
+        Python signature:
+        ```python
+        def generate_synthetic(
+            df: pd.DataFrame,
+            n_samples: int,
+            preserve_correlations: bool = True
+        ) -> Tuple[pd.DataFrame, SyntheticDataMetrics]
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - dataframe
+                - n_samples
+              properties:
+                dataframe:
+                  type: object
+                n_samples:
+                  type: integer
+                  minimum: 1
+                preserve_correlations:
+                  type: boolean
+                  default: true
+      responses:
+        '200':
+          description: Synthetic data generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  synthetic_data:
+                    type: object
+                    description: Generated pandas DataFrame
+                  metrics:
+                    $ref: '#/components/schemas/SyntheticDataMetrics'
+
+  # ============================================================
+  # CATALOG OPERATIONS
+  # ============================================================
+  /catalog/datasets:
+    get:
+      operationId: filter_datasets
+      summary: Filter and search datasets in catalog
+      description: |
+        Python signature:
+        ```python
+        def filter_datasets(
+            min_score: float = None,
+            domains: List[str] = None,
+            min_rows: int = None,
+            max_rows: int = None,
+            query: str = None,
+            sort_by: str = "usability_score",
+            sort_desc: bool = True,
+            limit: int = 50
+        ) -> List[Dataset]
+        ```
+      parameters:
+        - name: min_score
+          in: query
+          schema:
+            type: number
+        - name: domains
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+        - name: query
+          in: query
+          schema:
+            type: string
+        - name: sort_by
+          in: query
+          schema:
+            type: string
+            enum: [usability_score, name, created_at, row_count]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Matching datasets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DatasetSummary'
+
+    post:
+      operationId: add_dataset
+      summary: Add a dataset to the catalog
+      description: |
+        Python signature:
+        ```python
+        def add_dataset(
+            name: str,
+            file_path: str,
+            description: str = None,
+            domain_tags: List[str] = None,
+            auto_assess: bool = True,
+            target_column: str = None
+        ) -> Dataset
+        ```
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetCreate'
+      responses:
+        '201':
+          description: Dataset added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+
+  /catalog/datasets/{dataset_id}:
+    get:
+      operationId: get_dataset
+      summary: Get dataset details including latest report
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Dataset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetDetail'
+        '404':
+          description: Dataset not found
+
+    delete:
+      operationId: delete_dataset
+      summary: Remove dataset from catalog
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Dataset deleted
+
+components:
+  schemas:
+    QualityReport:
+      type: object
+      required:
+        - id
+        - usability_score
+        - prediction_quality
+        - data_completeness
+        - feature_profiles
+      properties:
+        id:
+          type: string
+          format: uuid
+        usability_score:
+          type: number
+          minimum: 0
+          maximum: 100
+        prediction_quality:
+          type: number
+          minimum: 0
+          maximum: 100
+        data_completeness:
+          type: number
+          minimum: 0
+          maximum: 100
+        feature_diversity:
+          type: number
+          minimum: 0
+          maximum: 100
+        size_appropriateness:
+          type: number
+          minimum: 0
+          maximum: 100
+        target_column:
+          type: string
+        task_type:
+          type: string
+          enum: [classification, regression]
+        feature_profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureProfile'
+        anomalies:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnomalyRecord'
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/FeatureSuggestion'
+        assessment_time_seconds:
+          type: number
+
+    FeatureProfile:
+      type: object
+      required:
+        - feature_name
+        - feature_type
+        - importance_score
+      properties:
+        feature_name:
+          type: string
+        feature_type:
+          type: string
+          enum: [numeric, categorical, boolean, datetime]
+        missing_count:
+          type: integer
+        missing_ratio:
+          type: number
+        unique_count:
+          type: integer
+        importance_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        shap_mean:
+          type: number
+        distribution_skew:
+          type: number
+        suggested_transform:
+          type: string
+
+    AnomalyRecord:
+      type: object
+      required:
+        - row_index
+        - anomaly_score
+        - percentile
+      properties:
+        row_index:
+          type: integer
+        anomaly_score:
+          type: number
+        percentile:
+          type: number
+        top_contributors:
+          type: array
+          items:
+            type: object
+            properties:
+              feature:
+                type: string
+              contribution:
+                type: number
+              reason:
+                type: string
+
+    FeatureSuggestion:
+      type: object
+      required:
+        - suggestion_type
+        - target_features
+        - description
+      properties:
+        suggestion_type:
+          type: string
+          enum: [remove, transform, combine]
+        target_features:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        expected_impact:
+          type: number
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    SyntheticDataMetrics:
+      type: object
+      properties:
+        n_samples:
+          type: integer
+        mean_correlation_error:
+          type: number
+        distribution_similarity:
+          type: number
+        generation_time_seconds:
+          type: number
+
+    Dataset:
+      type: object
+      required:
+        - id
+        - name
+        - file_path
+        - row_count
+        - feature_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        domain_tags:
+          type: array
+          items:
+            type: string
+        file_path:
+          type: string
+        row_count:
+          type: integer
+        feature_count:
+          type: integer
+        target_column:
+          type: string
+        usability_score:
+          type: number
+        created_at:
+          type: string
+          format: date-time
+
+    DatasetSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        domain_tags:
+          type: array
+          items:
+            type: string
+        row_count:
+          type: integer
+        feature_count:
+          type: integer
+        usability_score:
+          type: number
+
+    DatasetCreate:
+      type: object
+      required:
+        - name
+        - file_path
+      properties:
+        name:
+          type: string
+        file_path:
+          type: string
+        description:
+          type: string
+        domain_tags:
+          type: array
+          items:
+            type: string
+        auto_assess:
+          type: boolean
+          default: true
+        target_column:
+          type: string
+
+    DatasetDetail:
+      allOf:
+        - $ref: '#/components/schemas/Dataset'
+        - type: object
+          properties:
+            latest_report:
+              $ref: '#/components/schemas/QualityReport'
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object

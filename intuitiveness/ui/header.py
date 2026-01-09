@@ -66,6 +66,7 @@ def render_page_header(
 
 def render_section_header(
     title: str,
+    subtitle: Optional[str] = None,
     with_dot: bool = True,
 ) -> None:
     """
@@ -73,18 +74,16 @@ def render_section_header(
 
     Args:
         title: Section title text
+        subtitle: Optional descriptive text below the title
         with_dot: Whether to show the Klein Blue accent dot
     """
-    if with_dot:
-        st.markdown(
-            f'<h2 class="section-header-dot">{title}</h2>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<h2 class="section-header">{title}</h2>',
-            unsafe_allow_html=True,
-        )
+    header_class = "section-header-dot" if with_dot else "section-header"
+    subtitle_html = f'<p style="color: #64748b; font-size: 0.9rem; margin-top: 4px; margin-bottom: 16px;">{subtitle}</p>' if subtitle else ''
+
+    st.markdown(
+        f'<h2 class="{header_class}">{title}</h2>{subtitle_html}',
+        unsafe_allow_html=True,
+    )
 
 
 def render_card_header(title: str) -> None:
@@ -95,11 +94,6 @@ def render_card_header(title: str) -> None:
         title: Header text
     """
     st.markdown(
-        f"""<div style="
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--color-text-primary, #0f172a);
-            margin-bottom: 12px;
-        ">{title}</div>""",
+        f'<div style="font-size: 1rem; font-weight: 600; color: var(--color-text-primary, #0f172a); margin-bottom: 12px;">{title}</div>',
         unsafe_allow_html=True,
     )

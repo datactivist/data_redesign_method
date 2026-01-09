@@ -10,11 +10,16 @@ scikit-learn
 # sentence-transformers removed - using HF Inference API instead (see models.py)
 streamlit>=1.28.0
 streamlit-extras>=0.7.0
-streamlit-pdf-viewer>=0.0.7
 streamlit-agraph>=0.0.45
 plotly>=5.18.0
 openai>=1.0.0
 streamlit-javascript>=0.1.5
 numpy
 # Note: Using built-in st.json() for JSON visualization (streamlit-json-viewer doesn't exist on PyPI)
-requests 
+requests
+
+# Quality Data Platform dependencies
+tabpfn-client>=0.1.0
+tabpfn-extensions[unsupervised]>=0.2.0
+shap>=0.42.0
+ 
