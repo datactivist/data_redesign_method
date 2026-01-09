@@ -1,11 +1,20 @@
 """
 Quality Data Platform - Quality Dashboard UI
 
+Phase 1.3 - Code Simplification (011-code-simplification)
+Refactored to use ui/quality/ package modules.
+
 Streamlit UI component for dataset quality assessment, including:
-- File upload
-- Assessment trigger with progress
-- Quality report display
-- Report download
+- File upload (US-1 Step 1)
+- Assessment trigger with progress (US-1 Step 2)
+- Quality report display (US-4 Traffic Light)
+- Feature suggestions and apply (US-1 Step 3, FR-002)
+- Report download (FR-003, FR-004)
+
+Spec Traceability:
+------------------
+- 009-quality-data-platform: Quality assessment core
+- 010-quality-ds-workflow: DS Co-Pilot features (US-1 through US-4)
 """
 
 import streamlit as st
@@ -14,7 +23,7 @@ import io
 import json
 import time
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
 
 from intuitiveness.ui.layout import card, spacer
 from intuitiveness.ui.header import render_page_header, render_section_header
@@ -22,556 +31,168 @@ from intuitiveness.ui.metric_card import render_metric_card, render_metric_card_
 from intuitiveness.ui.alert import info, success, warning, error
 from intuitiveness.ui.button import primary_button, secondary_button
 
-# Session state keys
-SESSION_KEY_QUALITY_REPORT = "quality_report"
-SESSION_KEY_QUALITY_DF = "quality_df"
-SESSION_KEY_QUALITY_FILE_NAME = "quality_file_name"
-SESSION_KEY_ASSESSMENT_PROGRESS = "assessment_progress"
-SESSION_KEY_APPLIED_SUGGESTIONS = "applied_suggestions"
-# New session state keys for 010-quality-ds-workflow
-SESSION_KEY_TRANSFORMED_DF = "transformed_df"
-SESSION_KEY_TRANSFORMATION_LOG = "transformation_log"
-SESSION_KEY_BENCHMARK_REPORT = "benchmark_report"
-SESSION_KEY_EXPORT_FORMAT = "export_format"
-# P0 FIX: Report history for versioning (Mx. Context Keeper)
-SESSION_KEY_QUALITY_REPORTS_HISTORY = "quality_reports_history"
-SESSION_KEY_CURRENT_REPORT_INDEX = "current_report_index"
+# Phase 1.3: Import from ui/quality/ package modules (011-code-simplification)
+from intuitiveness.ui.quality.utils import (
+    SESSION_KEY_QUALITY_REPORT,
+    SESSION_KEY_QUALITY_DF,
+    SESSION_KEY_QUALITY_FILE_NAME,
+    SESSION_KEY_ASSESSMENT_PROGRESS,
+    SESSION_KEY_APPLIED_SUGGESTIONS,
+    SESSION_KEY_TRANSFORMED_DF,
+    SESSION_KEY_TRANSFORMATION_LOG,
+    SESSION_KEY_BENCHMARK_REPORT,
+    SESSION_KEY_EXPORT_FORMAT,
+    SESSION_KEY_QUALITY_REPORTS_HISTORY,
+    SESSION_KEY_CURRENT_REPORT_INDEX,
+    get_score_color,
+    get_score_label,
+)
+
+from intuitiveness.ui.quality.state import (
+    save_report_to_history,
+    get_initial_report,
+    get_current_report,
+    clear_report_history,
+    render_quality_score_evolution,
+)
+
+from intuitiveness.ui.quality.upload import (
+    render_file_upload,
+    render_target_selection,
+)
+
+from intuitiveness.ui.quality.assessment import (
+    render_assessment_button,
+)
+
+from intuitiveness.ui.quality.suggestions import (
+    render_feature_suggestions,
+    render_apply_all_button,
+)
+
+from intuitiveness.ui.quality.readiness import (
+    render_readiness_indicator,
+    render_tabpfn_methodology,
+)
+
+# Backward compatibility aliases (private functions now use public imports)
+_save_report_to_history = save_report_to_history
+_get_initial_report = get_initial_report
+_get_current_report = get_current_report
+_clear_report_history = clear_report_history
+_score_color = get_score_color
+_score_label = get_score_label
 
 
-def _save_report_to_history(report) -> None:
+def render_ml_diagnostics(report) -> None:
     """
-    P0 FIX: Save report to history instead of overwriting.
+    P0 FIX: Render standard ML diagnostic visualizations.
 
-    This preserves the original assessment so users can compare
-    before/after quality scores across transformation iterations.
-    """
-    if SESSION_KEY_QUALITY_REPORTS_HISTORY not in st.session_state:
-        st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY] = []
+    Addresses ML engineer feedback: "The common machine learning graphics
+    are not there, so how do I know that my dataset is ready for ML?"
 
-    # Append to history
-    st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY].append(report)
-    # Update current index
-    st.session_state[SESSION_KEY_CURRENT_REPORT_INDEX] = (
-        len(st.session_state[SESSION_KEY_QUALITY_REPORTS_HISTORY]) - 1
-    )
-    # Also set current report (for backward compatibility)
-    st.session_state[SESSION_KEY_QUALITY_REPORT] = report
-
-
-def _get_initial_report():
-    """Get the initial (first) quality report from history."""
-    history = st.session_state.get(SESSION_KEY_QUALITY_REPORTS_HISTORY, [])
-    return history[0] if history else None
-
-
-def _get_current_report():
-    """Get the current (latest) quality report."""
-    return st.session_state.get(SESSION_KEY_QUALITY_REPORT)
-
-
-def _clear_report_history() -> None:
-    """Clear all report history (for starting fresh)."""
-    st.session_state.pop(SESSION_KEY_QUALITY_REPORTS_HISTORY, None)
-    st.session_state.pop(SESSION_KEY_CURRENT_REPORT_INDEX, None)
-    st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
-
-
-def render_quality_score_evolution() -> None:
-    """
-    P1 FIX (Mx. Context Keeper): Display before/after quality scores when re-assessment occurs.
-
-    Shows quality score evolution across transformations, allowing users to see
-    the impact of their data cleaning decisions.
-    """
-    initial = _get_initial_report()
-    current = _get_current_report()
-
-    # Only show if we have both reports and they differ
-    if not initial or not current:
-        return
-    if initial.id == current.id:
-        return
-
-    # Calculate deltas
-    score_delta = current.usability_score - initial.usability_score
-
-    # Determine improvement direction
-    improved = score_delta >= 0
-    delta_color = "#22c55e" if improved else "#ef4444"
-    delta_icon = "↑" if improved else "↓"
-
-    # Build evolution display
-    st.markdown(
-        f"""
-        <div style="
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            padding: 20px;
-            margin: 16px 0;
-        ">
-            <div style="
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 16px;
-            ">
-                <div style="font-weight: 600; color: #475569; font-size: 14px;">
-                    📈 Quality Score Evolution
-                </div>
-                <div style="
-                    background: {delta_color}20;
-                    color: {delta_color};
-                    padding: 4px 12px;
-                    border-radius: 16px;
-                    font-weight: 600;
-                    font-size: 14px;
-                ">
-                    {delta_icon} {abs(score_delta):+.1f} pts
-                </div>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 24px;">
-                <!-- Initial Score -->
-                <div style="text-align: center; flex: 1;">
-                    <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">INITIAL</div>
-                    <div style="font-size: 32px; font-weight: bold; color: {_score_color(initial.usability_score)};">
-                        {initial.usability_score:.0f}
-                    </div>
-                </div>
-
-                <!-- Arrow -->
-                <div style="font-size: 24px; color: #cbd5e1;">→</div>
-
-                <!-- Current Score -->
-                <div style="text-align: center; flex: 1;">
-                    <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">CURRENT</div>
-                    <div style="font-size: 32px; font-weight: bold; color: {_score_color(current.usability_score)};">
-                        {current.usability_score:.0f}
-                    </div>
-                </div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # Show sub-metric changes in expandable section
-    with st.expander("View Sub-Metric Changes"):
-        metrics = [
-            ("Prediction Quality", initial.prediction_quality, current.prediction_quality),
-            ("Data Completeness", initial.data_completeness, current.data_completeness),
-            ("Feature Diversity", initial.feature_diversity, current.feature_diversity),
-            ("Size Appropriateness", initial.size_appropriateness, current.size_appropriateness),
-        ]
-
-        metric_data = []
-        for name, init_val, curr_val in metrics:
-            delta = curr_val - init_val
-            delta_str = f"{delta:+.1f}" if delta != 0 else "—"
-            metric_data.append({
-                "Metric": name,
-                "Initial": f"{init_val:.0f}",
-                "Current": f"{curr_val:.0f}",
-                "Change": delta_str,
-            })
-
-        metric_df = pd.DataFrame(metric_data)
-        st.dataframe(
-            metric_df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Metric": st.column_config.TextColumn("Metric", width="medium"),
-                "Initial": st.column_config.TextColumn("Initial", width="small"),
-                "Current": st.column_config.TextColumn("Current", width="small"),
-                "Change": st.column_config.TextColumn("Change", width="small"),
-            },
-        )
-
-        # Show assessment count
-        history = st.session_state.get(SESSION_KEY_QUALITY_REPORTS_HISTORY, [])
-        if len(history) > 1:
-            st.markdown(
-                f'<div style="color: #94a3b8; font-size: 13px;">📊 {len(history)} assessments in history</div>',
-                unsafe_allow_html=True,
-            )
-
-
-def _score_color(score: float) -> str:
-    """Get color based on score value."""
-    if score >= 80:
-        return "#22c55e"  # green
-    elif score >= 60:
-        return "#eab308"  # yellow
-    elif score >= 40:
-        return "#f97316"  # orange
-    else:
-        return "#ef4444"  # red
-
-
-def _score_label(score: float) -> str:
-    """Get label based on score value."""
-    if score >= 80:
-        return "Excellent"
-    elif score >= 60:
-        return "Good"
-    elif score >= 40:
-        return "Fair"
-    else:
-        return "Poor"
-
-
-def render_file_upload() -> Optional[pd.DataFrame]:
-    """
-    Render file upload component.
-
-    Returns:
-        Uploaded DataFrame or None.
-    """
-    uploaded_file = st.file_uploader(
-        "Upload a CSV file for quality assessment",
-        type=["csv"],
-        help="Upload a tabular dataset (50-10,000 rows recommended)",
-        key="quality_file_uploader",
-    )
-
-    if uploaded_file is not None:
-        try:
-            df = pd.read_csv(uploaded_file)
-            st.session_state[SESSION_KEY_QUALITY_DF] = df
-            st.session_state[SESSION_KEY_QUALITY_FILE_NAME] = uploaded_file.name
-            return df
-        except Exception as e:
-            error(f"Failed to read CSV file: {e}")
-            return None
-
-    return st.session_state.get(SESSION_KEY_QUALITY_DF)
-
-
-def render_target_selection(df: pd.DataFrame) -> Optional[str]:
-    """
-    Render target column selection.
-
-    Args:
-        df: DataFrame to select target from.
-
-    Returns:
-        Selected target column name.
-    """
-    columns = list(df.columns)
-
-    # Try to guess a reasonable default
-    default_idx = 0
-    for i, col in enumerate(columns):
-        col_lower = col.lower()
-        if any(word in col_lower for word in ["target", "label", "class", "y", "outcome"]):
-            default_idx = i
-            break
-
-    target = st.selectbox(
-        "Select target column",
-        options=columns,
-        index=default_idx,
-        help="The column you want to predict (for classification or regression)",
-        key="quality_target_column",
-    )
-
-    return target
-
-
-def render_assessment_button(
-    df: pd.DataFrame,
-    target_column: str,
-    on_complete: Optional[Callable] = None,
-) -> None:
-    """
-    Render assessment button with progress.
-
-    Args:
-        df: DataFrame to assess.
-        target_column: Target column name.
-        on_complete: Optional callback when assessment completes.
-    """
-    from intuitiveness.quality.assessor import (
-        assess_dataset,
-        MIN_ROWS_FOR_ASSESSMENT,
-    )
-
-    # Validate
-    if len(df) < MIN_ROWS_FOR_ASSESSMENT:
-        warning(
-            f"Dataset has only {len(df)} rows. "
-            f"Minimum {MIN_ROWS_FOR_ASSESSMENT} rows required for reliable assessment."
-        )
-        return
-
-    if len(df) > 10000:
-        info(
-            f"Dataset has {len(df):,} rows. "
-            "A representative sample of 5,000 rows will be used for assessment."
-        )
-
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        run_assessment = st.button(
-            "🔍 Run Assessment",
-            type="primary",
-            use_container_width=True,
-            key="run_quality_assessment",
-        )
-
-    if run_assessment:
-        progress_bar = st.progress(0, text="Starting assessment...")
-
-        def progress_callback(message: str, progress: float):
-            progress_bar.progress(progress, text=message)
-
-        try:
-            report = assess_dataset(
-                df=df,
-                target_column=target_column,
-                task_type="auto",
-                compute_shap=True,  # Enable SHAP for maximum interpretability
-                progress_callback=progress_callback,
-            )
-
-            # P0 FIX: Save to history instead of overwriting
-            _save_report_to_history(report)
-            progress_bar.progress(1.0, text="Assessment complete!")
-            time.sleep(0.5)
-            progress_bar.empty()
-
-            if on_complete:
-                on_complete(report)
-
-            st.rerun()
-
-        except Exception as e:
-            progress_bar.empty()
-            error(f"Assessment failed: {e}")
-
-
-def render_feature_suggestions(report) -> None:
-    """
-    Render feature engineering suggestions section.
+    Shows:
+    - Feature Importance Bar Chart
+    - SHAP Summary Plot
+    - Class Distribution (for classification)
 
     Args:
         report: QualityReport instance.
     """
-    from intuitiveness.quality.feature_engineer import suggest_features, apply_suggestion
+    from intuitiveness.quality.visualizations import (
+        create_feature_importance_chart,
+        create_shap_summary_plot,
+        create_class_distribution,
+    )
 
     render_section_header(
-        "Feature Engineering Suggestions",
-        "Recommendations to improve your dataset's quality"
+        "ML Diagnostic Visualizations",
+        "Standard charts to validate your dataset is ready for modeling"
     )
 
-    # Get the current DataFrame
     df = st.session_state.get(SESSION_KEY_QUALITY_DF)
-    if df is None:
-        info("Upload a dataset to get feature engineering suggestions.")
-        return
 
-    # Generate suggestions
-    suggestions = suggest_features(report, df=df, max_suggestions=5)
+    with card():
+        # Tabs for different visualizations
+        tab1, tab2, tab3 = st.tabs([
+            "📊 Feature Importance",
+            "🎯 SHAP Impact",
+            "📈 Class Distribution"
+        ])
 
-    if not suggestions:
-        success("No suggestions - your dataset looks well-prepared!")
-        return
+        with tab1:
+            st.markdown("""
+            ### 📊 Feature Importance via Ablation
 
-    # Track applied suggestions
-    applied = st.session_state.get(SESSION_KEY_APPLIED_SUGGESTIONS, set())
+            **How it works**: TabPFN importance is computed using **ablation study** - we measure how much
+            prediction accuracy drops when each feature is removed. This is repeated across 3 cross-validation folds
+            for stability.
 
-    for i, suggestion in enumerate(suggestions):
-        suggestion_key = f"{suggestion.suggestion_type}_{'-'.join(suggestion.target_features)}"
-        is_applied = suggestion_key in applied
+            - **High importance** (0.7+): Feature is critical for predictions
+            - **Medium importance** (0.3-0.7): Feature contributes but isn't essential
+            - **Low importance** (<0.3): Consider removing to reduce noise and speed up modeling
 
-        # Suggestion card
-        with st.container():
-            col1, col2, col3 = st.columns([1, 6, 2])
+            *This differs from tree-based importance (which measures split frequency) - ablation directly measures
+            predictive contribution.*
+            """)
+            spacer(8)
+            try:
+                fig = create_feature_importance_chart(report)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                warning(f"Could not generate feature importance chart: {e}")
 
-            with col1:
-                # Type badge
-                type_colors = {
-                    "remove": "#ef4444",
-                    "transform": "#3b82f6",
-                    "combine": "#8b5cf6",
-                }
-                color = type_colors.get(suggestion.suggestion_type, "#64748b")
-                st.markdown(
-                    f"""
-                    <div style="
-                        background: {color}20;
-                        color: {color};
-                        padding: 4px 8px;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                        text-align: center;
-                    ">
-                        {suggestion.suggestion_type}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+        with tab2:
+            st.markdown("""
+            ### 🎯 SHAP Values (Model Interpretability)
 
-            with col2:
-                st.markdown(
-                    f"""
-                    <div style="margin-bottom: 4px;">
-                        <strong>{', '.join(suggestion.target_features)}</strong>
-                    </div>
-                    <div style="color: #64748b; font-size: 14px;">
-                        {suggestion.description}
-                    </div>
-                    <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
-                        Expected impact: <strong>+{suggestion.expected_impact:.1f}</strong> pts &middot;
-                        Confidence: <strong>{suggestion.confidence:.0%}</strong>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+            **SHAP** (SHapley Additive exPlanations) comes from game theory. It answers:
+            *"How much did each feature contribute to each prediction?"*
 
-            with col3:
-                if is_applied:
-                    st.markdown(
-                        '<div style="color: #22c55e; font-weight: 600;">✓ Applied</div>',
-                        unsafe_allow_html=True,
-                    )
+            **How it works with TabPFN**:
+            - We use KernelSHAP to compute feature attributions
+            - Each bar shows the **mean |SHAP value|** - higher means more influence on predictions
+            - Unlike feature importance (global), SHAP can show per-sample contributions
+
+            **Interpreting the chart**:
+            - Features at the top have the most consistent impact
+            - Small SHAP values mean the feature's impact varies or is minimal
+
+            *If SHAP fails (e.g., timeout), we fall back to permutation importance.*
+            """)
+            spacer(8)
+            try:
+                fig = create_shap_summary_plot(report.feature_profiles)
+                st.plotly_chart(fig, use_container_width=True)
+            except Exception as e:
+                warning(f"Could not generate SHAP chart: {e}")
+
+        with tab3:
+            if report.task_type == "classification" and df is not None:
+                st.markdown("""
+                ### 📈 Class Distribution
+
+                **Why it matters**: TabPFN, like most classifiers, can struggle with severe class imbalance.
+                If one class is much rarer than others, the model may under-predict it.
+
+                **What to look for**:
+                - **Balanced** (green): Classes are roughly equal - ideal for learning
+                - **Moderate imbalance** (yellow): Some classes have 2-5× more samples
+                - **Severe imbalance** (red): 10× or more difference - consider oversampling or class weights
+
+                *TabPFN handles moderate imbalance well, but severe cases may need synthetic data augmentation.*
+                """)
+                spacer(8)
+                if report.target_column in df.columns:
+                    try:
+                        fig = create_class_distribution(df[report.target_column])
+                        st.plotly_chart(fig, use_container_width=True)
+                    except Exception as e:
+                        warning(f"Could not generate class distribution: {e}")
                 else:
-                    if st.button(
-                        "Apply",
-                        key=f"apply_suggestion_{i}",
-                        use_container_width=True,
-                    ):
-                        # Apply the suggestion
-                        try:
-                            new_df = apply_suggestion(df, suggestion)
-                            st.session_state[SESSION_KEY_QUALITY_DF] = new_df
-
-                            # Mark as applied
-                            if SESSION_KEY_APPLIED_SUGGESTIONS not in st.session_state:
-                                st.session_state[SESSION_KEY_APPLIED_SUGGESTIONS] = set()
-                            st.session_state[SESSION_KEY_APPLIED_SUGGESTIONS].add(suggestion_key)
-
-                            # UX FIX: Keep the report to stay on the same page
-                            # User can click "Re-assess with Changes" when ready
-
-                            success(f"Applied suggestion: {suggestion.suggestion_type} on {', '.join(suggestion.target_features)}")
-                            st.rerun()
-                        except Exception as e:
-                            error(f"Failed to apply suggestion: {e}")
-
-            st.markdown("<hr style='margin: 12px 0; border: none; border-top: 1px solid #e2e8f0;'>", unsafe_allow_html=True)
-
-    # Re-assess button
-    if applied:
-        spacer(8)
-        if st.button("🔄 Re-assess with Changes", use_container_width=True):
-            st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)
-            st.rerun()
-
-
-# ============================================================================
-# NEW UI COMPONENTS FOR 010-quality-ds-workflow
-# Data Scientist Co-Pilot Feature
-# ============================================================================
-
-
-def render_readiness_indicator(report) -> None:
-    """
-    Display traffic light readiness indicator.
-
-    Provides instant go/no-go visual for data scientists.
-
-    Args:
-        report: QualityReport instance.
-    """
-    from intuitiveness.quality.assessor import get_readiness_indicator
-    from intuitiveness.quality.feature_engineer import suggest_features
-
-    df = st.session_state.get(SESSION_KEY_QUALITY_DF)
-    suggestions = suggest_features(report, df=df, max_suggestions=10) if df is not None else []
-
-    # Estimate improvement from suggestions
-    estimated_improvement = sum(s.expected_impact for s in suggestions)
-
-    indicator = get_readiness_indicator(
-        score=report.usability_score,
-        n_suggestions=len(suggestions),
-        estimated_improvement=estimated_improvement,
-    )
-
-    # Color mapping
-    colors = {
-        "green": "#22c55e",
-        "yellow": "#eab308",
-        "red": "#ef4444",
-    }
-    bg_colors = {
-        "green": "#dcfce7",
-        "yellow": "#fef3c7",
-        "red": "#fee2e2",
-    }
-
-    color = colors.get(indicator.color, "#64748b")
-    bg_color = bg_colors.get(indicator.color, "#f1f5f9")
-
-    # Emoji mapping
-    emojis = {
-        "ready": "🟢",
-        "fixable": "🟡",
-        "needs_work": "🔴",
-    }
-    emoji = emojis.get(indicator.status, "⚪")
-
-    st.markdown(
-        f"""
-        <div style="
-            background: {bg_color};
-            border: 3px solid {color};
-            border-radius: 16px;
-            padding: 24px;
-            text-align: center;
-            margin: 16px 0;
-        ">
-            <div style="font-size: 48px; margin-bottom: 8px;">{emoji}</div>
-            <div style="
-                font-size: 24px;
-                font-weight: bold;
-                color: {color};
-                margin-bottom: 8px;
-            ">
-                {indicator.title}
-            </div>
-            <div style="
-                font-size: 16px;
-                color: #475569;
-            ">
-                {indicator.message}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # P1 FIX (Dr. Metric Mind): Add threshold rationale tooltip
-    with st.expander("ℹ️ How are these thresholds determined?"):
-        st.markdown(
-            """
-            The traffic light thresholds are based on **industry ML benchmarks** and empirical research:
-
-            | Score | Status | Rationale |
-            |-------|--------|-----------|
-            | **80+** | 🟢 Ready | Datasets scoring 80+ typically yield reliable models without significant preprocessing. This aligns with the industry standard for "production-ready" data quality. |
-            | **60-79** | 🟡 Fixable | Scores in this range indicate workable datasets that will benefit from automated fixes. Most issues are addressable with our suggested transformations. |
-            | **<60** | 🔴 Needs Work | Below 60, datasets have significant quality issues (high missing rates, severe class imbalance, or low predictive signal) that may require manual investigation. |
-
-            *These thresholds are calibrated against TabPFN's cross-validation performance and match common ML pipeline quality gates.*
-            """,
-            unsafe_allow_html=True,
-        )
+                    info("Target column not found in dataset.")
+            else:
+                info("Class distribution is only available for classification tasks.")
 
 
 def render_apply_all_button(report) -> None:
@@ -1115,6 +736,18 @@ def render_quality_report(report) -> None:
             "color": _score_color(report.size_appropriateness),
         },
     ])
+
+    spacer(24)
+
+    # P0 FIX: TabPFN Methodology Transparency Section
+    # Addresses ML engineer feedback: "I don't trust the interface on what TabPFN did"
+    render_tabpfn_methodology(report)
+
+    spacer(24)
+
+    # P0 FIX: ML Diagnostic Visualizations
+    # Addresses ML engineer feedback: "The common machine learning graphics are not there"
+    render_ml_diagnostics(report)
 
     spacer(24)
 

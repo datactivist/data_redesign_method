@@ -1,6 +1,6 @@
 # data_redesign_method Development Guidelines
 
-## Final objective 
+## Intermediary objective 
 
 For the three datasets here (/Users/arthursarazin/Documents/data_redesign_method/test_data), which are L4 datasets, I need : 
 
@@ -15,6 +15,14 @@ For the three datasets here (/Users/arthursarazin/Documents/data_redesign_method
 - a L2 table where catorizes high score (above median) and low score (below median) (test 1) ; a L2 table that distinguishes recipients with more than 10k euros funding and those with less than 10k euros funding (test 2) ; a L2 table that categorizes energy consumptions prices into "high price"/"low price" (test 3).
 - a L3 data table that links high scores to the number of students per class (test 1) ; a L2 table that links 10k euro fundings with the types of projects funded (test 2) ; a L3 table that links high energy prices with the type of energy consumed (test 3). 
 
+## Final objective
+
+IMPORTANT : go through the scientific paper that is your **kernel theory**
+Once the user has set up his intent and has a dataset he likes, intuitiveness will take care of generating high-quality dataset using [TO BE GENERATED] : 
+- propose informative features (columns to create, combine, delete) by observing TabPFN scores
+- validate key metrics : can they help predict what we want to predict
+- propose differents apps : scoring, anomaly dectection through density, synthetic data generation 
+
 ## Testing requirements
 - All tests results should be documented here (/Users/arthursarazin/Documents/data_redesign_method/tests)
 - All datasets (/Users/arthursarazin/Documents/data_redesign_method/test_data) should be tested with unit tests to ensure the correctness of the data transformations.
@@ -27,6 +35,10 @@ For the three datasets here (/Users/arthursarazin/Documents/data_redesign_method
 - JSON files (session exports, test artifacts) (006-playwright-mcp-e2e)
 - Python 3.11 (existing `myenv311` virtual environment) (006-playwright-mcp-e2e)
 - JSON files (session graphs) + CSV files (test data) (006-playwright-mcp-e2e)
+- Python 3.11 (existing `myenv311` virtual environment) + Streamlit >=1.28.0 (already installed), Google Fonts CDN (external) (007-streamlit-design-makeup)
+- N/A (UI-only changes, no data layer modifications) (007-streamlit-design-makeup)
+- Python 3.11 (existing `myenv311` virtual environment) + Streamlit >=1.28.0, pandas, requests (all already installed) (008-datagouv-search)
+- Session state for search results; local file cache for downloaded CSVs (~/.cache/datagouv) (008-datagouv-search)
 
 ## Project Structure
 
@@ -48,9 +60,9 @@ cd src [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNOLO
 
 
 ## Recent Changes
-- 006-playwright-mcp-e2e: Added Python 3.11 (existing `myenv311` virtual environment)
-- 006-playwright-mcp-e2e: Added Python 3.11 (existing `myenv311` virtual environment)
-- 006-playwright-mcp-e2e: Added Python 3.11
+- 010-quality-ds-workflow: Added Python 3.11 (existing `myenv311` virtual environment)
+- 010-quality-ds-workflow: Data Scientist Co-Pilot - 60-second data prep workflow with synthetic-to-real validation, one-click improvements with benchmarks, and export-and-go functionality (extends 009)
+- 009-quality-data-platform: Added Python 3.11 (existing `myenv311` virtual environment)
 
 
 

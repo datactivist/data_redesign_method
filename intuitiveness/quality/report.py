@@ -11,6 +11,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 from intuitiveness.quality.models import QualityReport
+# Import consolidated utility (Phase 2 - 011-code-simplification)
+from intuitiveness.utils import score_to_color
 
 logger = logging.getLogger(__name__)
 
@@ -155,16 +157,9 @@ def export_report_html(
     Returns:
         HTML string.
     """
-    # Score color based on value
-    def score_color(score: float) -> str:
-        if score >= 80:
-            return "#22c55e"  # green
-        elif score >= 60:
-            return "#eab308"  # yellow
-        elif score >= 40:
-            return "#f97316"  # orange
-        else:
-            return "#ef4444"  # red
+    # Score color - use consolidated utility (011-code-simplification)
+    def get_color(score: float) -> str:
+        return score_to_color(score, thresholds=(40, 60, 80), colors=("#ef4444", "#f97316", "#eab308", "#22c55e"))
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -174,7 +169,7 @@ def export_report_html(
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
         h1 {{ color: #1e293b; }}
         .score-card {{ background: #f8fafc; border-radius: 12px; padding: 24px; margin: 20px 0; }}
-        .main-score {{ font-size: 48px; font-weight: bold; color: {score_color(report.usability_score)}; }}
+        .main-score {{ font-size: 48px; font-weight: bold; color: {get_color(report.usability_score)}; }}
         .sub-scores {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 20px; }}
         .sub-score {{ background: white; padding: 16px; border-radius: 8px; }}
         .sub-score-label {{ font-size: 12px; color: #64748b; text-transform: uppercase; }}
@@ -207,19 +202,19 @@ def export_report_html(
         <div class="sub-scores">
             <div class="sub-score">
                 <div class="sub-score-label">Prediction Quality</div>
-                <div class="sub-score-value" style="color: {score_color(report.prediction_quality)}">{report.prediction_quality:.0f}</div>
+                <div class="sub-score-value" style="color: {get_color(report.prediction_quality)}">{report.prediction_quality:.0f}</div>
             </div>
             <div class="sub-score">
                 <div class="sub-score-label">Data Completeness</div>
-                <div class="sub-score-value" style="color: {score_color(report.data_completeness)}">{report.data_completeness:.0f}</div>
+                <div class="sub-score-value" style="color: {get_color(report.data_completeness)}">{report.data_completeness:.0f}</div>
             </div>
             <div class="sub-score">
                 <div class="sub-score-label">Feature Diversity</div>
-                <div class="sub-score-value" style="color: {score_color(report.feature_diversity)}">{report.feature_diversity:.0f}</div>
+                <div class="sub-score-value" style="color: {get_color(report.feature_diversity)}">{report.feature_diversity:.0f}</div>
             </div>
             <div class="sub-score">
                 <div class="sub-score-label">Size Appropriateness</div>
-                <div class="sub-score-value" style="color: {score_color(report.size_appropriateness)}">{report.size_appropriateness:.0f}</div>
+                <div class="sub-score-value" style="color: {get_color(report.size_appropriateness)}">{report.size_appropriateness:.0f}</div>
             </div>
         </div>
     </div>

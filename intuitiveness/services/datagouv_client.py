@@ -26,6 +26,9 @@ from intuitiveness.data_sources.nl_query import NLQueryEngine, NLQueryResult
 # Import DataGouvAPI from local copy
 from intuitiveness.services.datagouv_api import DataGouvAPI
 
+# Import consolidated utilities (Phase 2 - 011-code-simplification)
+from intuitiveness.utils import format_filesize, parse_iso_datetime, truncate_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,44 +91,27 @@ class DataGouvLoadError(Exception):
 
 
 # =============================================================================
-# Helper Functions
+# Helper Functions - Use consolidated utilities from intuitiveness.utils
 # =============================================================================
 
+# Local aliases for backward compatibility (delegates to utils/common.py)
 def _format_filesize(size_bytes: Optional[int]) -> str:
-    """Convert bytes to human-readable format."""
-    if size_bytes is None:
-        return "Unknown size"
-
-    for unit in ['B', 'KB', 'MB', 'GB']:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} TB"
+    """Convert bytes to human-readable format. Delegates to utils.format_filesize."""
+    return format_filesize(size_bytes) if size_bytes is not None else "Unknown size"
 
 
 def _parse_datetime(date_str: Optional[str]) -> Optional[datetime]:
-    """Parse ISO datetime string from API response."""
-    if not date_str:
-        return None
-    try:
-        # Handle various ISO formats from data.gouv.fr
-        if 'T' in date_str:
-            return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-        return datetime.strptime(date_str[:10], '%Y-%m-%d')
-    except (ValueError, TypeError):
-        return None
+    """Parse ISO datetime string. Delegates to utils.parse_iso_datetime."""
+    return parse_iso_datetime(date_str)
 
 
 def _truncate_description(description: Optional[str], max_length: int = 400) -> str:
-    """Truncate description to max_length chars with ellipsis."""
+    """Truncate description. Delegates to utils.truncate_text with newline cleanup."""
     if not description:
         return ""
-    description = description.strip()
-    # Remove markdown/HTML formatting for cleaner display
-    description = description.replace('\n', ' ').replace('\r', ' ')
-    if len(description) <= max_length:
-        return description
-    return description[:max_length - 3].rsplit(' ', 1)[0] + "..."
+    # Clean up newlines before truncating
+    cleaned = description.strip().replace('\n', ' ').replace('\r', ' ')
+    return truncate_text(cleaned, max_length)
 
 
 # =============================================================================

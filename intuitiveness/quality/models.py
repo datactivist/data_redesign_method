@@ -7,8 +7,97 @@ anomaly detection, and synthetic data generation.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Literal
+from typing import List, Dict, Any, Optional, Literal, Tuple
 from uuid import UUID, uuid4
+
+
+# ============================================================================
+# TabPFN DIAGNOSTICS - Full Transparency Layer (P0 Fix)
+# Captures all TabPFN internals for user transparency
+# ============================================================================
+
+
+@dataclass
+class TabPFNDiagnostics:
+    """
+    Full transparency into TabPFN assessment process.
+
+    Captures per-fold CV results, prediction confidence, estimator agreement,
+    and all methodology details for user trust and interpretability.
+
+    This addresses the ML engineer feedback: "I don't trust the interface
+    on what TabPFN did - it should be transparent."
+    """
+
+    # Cross-validation details (not just mean!)
+    fold_scores: List[float] = field(default_factory=list)
+    mean_accuracy: float = 0.0
+    std_accuracy: float = 0.0
+
+    # Prediction confidence metrics
+    prediction_confidence_mean: float = 0.0  # Mean of max class probabilities
+    prediction_confidence_min: float = 0.0   # Lowest confidence prediction
+    prediction_confidence_max: float = 0.0   # Highest confidence prediction
+
+    # Estimator agreement (TabPFN uses 8 estimators internally)
+    estimator_agreement: float = 0.0  # 1.0 = perfect agreement, 0.0 = no agreement
+
+    # Feature handling transparency
+    categorical_features_detected: List[str] = field(default_factory=list)
+    numeric_features_used: List[str] = field(default_factory=list)
+
+    # TabPFN internal parameters
+    temperature_used: float = 1.0
+    n_estimators: int = 8
+
+    # Embeddings shape (for reference - embeddings can be extracted)
+    embeddings_shape: Tuple[int, ...] = field(default_factory=tuple)
+
+    # SHAP computation status
+    shap_status: str = "not_computed"  # 'success' | 'failed' | 'not_computed'
+    shap_error_message: Optional[str] = None
+    shap_fallback_used: bool = False  # True if permutation importance was used
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "fold_scores": self.fold_scores,
+            "mean_accuracy": self.mean_accuracy,
+            "std_accuracy": self.std_accuracy,
+            "prediction_confidence_mean": self.prediction_confidence_mean,
+            "prediction_confidence_min": self.prediction_confidence_min,
+            "prediction_confidence_max": self.prediction_confidence_max,
+            "estimator_agreement": self.estimator_agreement,
+            "categorical_features_detected": self.categorical_features_detected,
+            "numeric_features_used": self.numeric_features_used,
+            "temperature_used": self.temperature_used,
+            "n_estimators": self.n_estimators,
+            "embeddings_shape": list(self.embeddings_shape),
+            "shap_status": self.shap_status,
+            "shap_error_message": self.shap_error_message,
+            "shap_fallback_used": self.shap_fallback_used,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TabPFNDiagnostics":
+        """Create from dictionary."""
+        return cls(
+            fold_scores=data.get("fold_scores", []),
+            mean_accuracy=data.get("mean_accuracy", 0.0),
+            std_accuracy=data.get("std_accuracy", 0.0),
+            prediction_confidence_mean=data.get("prediction_confidence_mean", 0.0),
+            prediction_confidence_min=data.get("prediction_confidence_min", 0.0),
+            prediction_confidence_max=data.get("prediction_confidence_max", 0.0),
+            estimator_agreement=data.get("estimator_agreement", 0.0),
+            categorical_features_detected=data.get("categorical_features_detected", []),
+            numeric_features_used=data.get("numeric_features_used", []),
+            temperature_used=data.get("temperature_used", 1.0),
+            n_estimators=data.get("n_estimators", 8),
+            embeddings_shape=tuple(data.get("embeddings_shape", [])),
+            shap_status=data.get("shap_status", "not_computed"),
+            shap_error_message=data.get("shap_error_message"),
+            shap_fallback_used=data.get("shap_fallback_used", False),
+        )
 
 
 @dataclass
@@ -200,6 +289,9 @@ class QualityReport:
     sampled: bool = False
     sample_size: Optional[int] = None
 
+    # P0 FIX: Full TabPFN transparency - captures all methodology details
+    tabpfn_diagnostics: Optional[TabPFNDiagnostics] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -220,6 +312,7 @@ class QualityReport:
             "feature_count": self.feature_count,
             "sampled": self.sampled,
             "sample_size": self.sample_size,
+            "tabpfn_diagnostics": self.tabpfn_diagnostics.to_dict() if self.tabpfn_diagnostics else None,
         }
 
     @classmethod
@@ -251,6 +344,7 @@ class QualityReport:
             feature_count=data.get("feature_count", 0),
             sampled=data.get("sampled", False),
             sample_size=data.get("sample_size"),
+            tabpfn_diagnostics=TabPFNDiagnostics.from_dict(data["tabpfn_diagnostics"]) if data.get("tabpfn_diagnostics") else None,
         )
 
     def get_top_features(self, n: int = 5) -> List[FeatureProfile]:
@@ -666,6 +760,9 @@ class ExportPackage:
     row_count: int = 0
     column_count: int = 0
 
+    # P0 FIX: Add task_type for correct model code generation
+    task_type: Literal["classification", "regression"] = "classification"
+
     def __post_init__(self):
         """Auto-fill row/column count from dataset if provided."""
         if self.dataset is not None:
@@ -683,36 +780,22 @@ class ExportPackage:
 
     @property
     def python_snippet(self) -> str:
-        """Generate Python code snippet for loading data."""
-        target = self.target_column or "target"
-        filename = self.filename
+        """
+        Generate robust Python code snippet for loading data and modeling.
 
-        if self.format == "csv":
-            load_code = f"df = pd.read_csv('{filename}')"
-        elif self.format == "pickle":
-            load_code = f"df = pd.read_pickle('{filename}')"
-        elif self.format == "parquet":
-            load_code = f"df = pd.read_parquet('{filename}')"
-        else:
-            load_code = f"df = pd.read_csv('{filename}')"
-
-        return f'''# Load your modeling-ready data
-import pandas as pd
-
-{load_code}
-X = df.drop('{target}', axis=1)
-y = df['{target}']
-
-# Train/test split
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Start modeling!
-# from sklearn.ensemble import RandomForestClassifier
-# model = RandomForestClassifier()
-# model.fit(X_train, y_train)
-# print(f"Accuracy: {{model.score(X_test, y_test):.2%}}")
-'''
+        Features:
+        - Auto-detects best task type (classification vs regression) at runtime
+        - Handles TabPFN's 10-class limit for classification
+        - Falls back to sklearn if TabPFN unavailable or fails
+        - Provides clear feedback about model selection
+        """
+        from intuitiveness.quality.exporter import generate_python_snippet
+        return generate_python_snippet(
+            filename=self.filename,
+            target_column=self.target_column or "target",
+            format=self.format,
+            task_type=self.task_type,
+        )
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
@@ -723,6 +806,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
             "transformation_log": self.transformation_log.to_dict() if self.transformation_log else None,
             "row_count": self.row_count,
             "column_count": self.column_count,
+            "task_type": self.task_type,
             "filename": self.filename,
             "python_snippet": self.python_snippet,
         }
@@ -737,4 +821,5 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
             transformation_log=TransformationLog.from_dict(data["transformation_log"]) if data.get("transformation_log") else None,
             row_count=data.get("row_count", 0),
             column_count=data.get("column_count", 0),
+            task_type=data.get("task_type", "classification"),
         )

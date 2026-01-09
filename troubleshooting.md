@@ -610,3 +610,437 @@ for col in ['ascent_category', 'score_quartile', 'performance_category', 'fundin
 ```
 
 **Lesson**: When creating new columns in one step, ensure all downstream steps know to look for those column names.
+
+---
+
+## NoneType Has No Attribute 'lower' - Data.gouv.fr API (2025-12-12)
+
+**Problem**: Searching on data.gouv.fr crashes with:
+```
+AttributeError: 'NoneType' object has no attribute 'lower'
+```
+
+**Root Cause**: The data.gouv.fr API sometimes returns `null` (None) for the `format` field of resources instead of an empty string. The code used `r.get('format', '').lower()` which:
+- Returns the default `''` when the key is MISSING
+- Returns `None` when the key EXISTS but has a null value
+- Calling `.lower()` on `None` raises AttributeError
+
+**Solution**: Use `(r.get('format') or '').lower()` which handles both missing keys AND null values.
+
+**File**: `intuitiveness/services/datagouv_client.py` (lines 201, 257)
+
+**Code Change**:
+```python
+# BEFORE (fails when format is null)
+r.get('format', '').lower() == 'csv'
+
+# AFTER (handles null values)
+(r.get('format') or '').lower() == 'csv'
+```
+
+**Lesson**: When dealing with external APIs, always use `(value or '')` pattern instead of `dict.get(key, '')` when the value might be explicitly null/None. The `or` operator handles both missing and null cases.
+
+---
+
+## ModuleNotFoundError: streamlit_pdf_viewer (2025-12-13)
+
+**Problem**: Running the Streamlit app crashes with:
+```
+ModuleNotFoundError: No module named 'streamlit_pdf_viewer'
+File "intuitiveness/ui/tutorial.py", line 14, in <module>
+    from streamlit_pdf_viewer import pdf_viewer
+```
+
+**Root Cause**: Python environment mismatch. The package `streamlit-pdf-viewer` is installed in the `myenv311` virtual environment, but Streamlit was launched from pyenv's system installation (`/Users/arthursarazin/.pyenv/shims/streamlit`) which uses a different Python without the package.
+
+**Diagnosis**:
+```bash
+# System path (wrong - doesn't have the package):
+which streamlit  # → /Users/arthursarazin/.pyenv/shims/streamlit
+
+# Virtual environment path (correct - has the package):
+source myenv311/bin/activate && which streamlit
+# → /Users/arthursarazin/Documents/data_redesign_method/myenv311/bin/streamlit
+```
+
+**Solution**: Always activate the virtual environment before running Streamlit:
+
+```bash
+# Option 1: Activate environment first
+source myenv311/bin/activate
+streamlit run intuitiveness/streamlit_app.py
+
+# Option 2: Use full path to streamlit
+./myenv311/bin/streamlit run intuitiveness/streamlit_app.py
+
+# Option 3: Use python -m streamlit
+./myenv311/bin/python -m streamlit run intuitiveness/streamlit_app.py
+```
+
+**Lesson**: When packages are installed in a virtual environment, always run commands from that environment. The shell's PATH might resolve to a system-wide installation that doesn't have your project dependencies.
+
+---
+
+## ValueError: DataFrame Truth Value Ambiguous (2025-12-14)
+
+**Problem**: When clicking "Apply All Suggestions" in the Quality Dashboard, got error:
+```
+ValueError: The truth value of a DataFrame is ambiguous. Use a.empty, a.bool(), a.item(), a.any() or a.all().
+```
+
+**Root Cause**: In `quality_dashboard.py` line 610, code used Python `or` operator with DataFrames:
+```python
+df = st.session_state.get(SESSION_KEY_TRANSFORMED_DF) or st.session_state.get(SESSION_KEY_QUALITY_DF)
+```
+
+When a DataFrame exists, Python tries to evaluate its boolean value for the `or` operator, which is ambiguous (is an empty DataFrame False? Is a DataFrame with False values False?).
+
+**Solution**: Use explicit None check instead of `or`:
+```python
+df = st.session_state.get(SESSION_KEY_TRANSFORMED_DF)
+if df is None:
+    df = st.session_state.get(SESSION_KEY_QUALITY_DF)
+```
+
+**File**: `intuitiveness/ui/quality_dashboard.py` (line 610)
+
+**Lesson**: Never use `or` operator for fallback values when dealing with DataFrames, numpy arrays, or other objects with ambiguous truth values. Always use explicit `is None` checks.
+
+---
+
+## UX Bug: Apply All Redirects Away from Report (2025-12-14)
+
+**Problem**: When user clicks "Apply All Suggestions", the interface redirects back to the upload/assessment screen instead of staying on the report page to show before/after comparison.
+
+**Root Cause**: After applying transformations, the code was calling:
+```python
+st.session_state.pop(SESSION_KEY_QUALITY_REPORT, None)  # Clears the report
+st.rerun()  # Refreshes the page
+```
+
+Clearing the report caused the dashboard to go back to "no report" state, showing the upload interface instead of the results.
+
+**Solution**: Keep the report in session state so user stays on the same page and can see:
+1. Success message with accuracy improvement
+2. Before/after comparison section
+3. Export section
+
+Simply removed the `pop(SESSION_KEY_QUALITY_REPORT)` call. User can explicitly click "Re-assess with Changes" or "New Assessment" when they want to start fresh.
+
+**File**: `intuitiveness/ui/quality_dashboard.py` (lines 486-511, 321-342)
+
+**Lesson**: When implementing one-click actions, consider the user journey. Users expect to see the result of their action on the same page, not be redirected elsewhere.
+
+---
+
+## CSV Parsing Error: Semicolon Delimiter Not Detected (2025-12-15)
+
+**Problem**: Uploading a French government CSV file fails with:
+```
+Error tokenizing data. C error: Expected 1 fields in line 3616, saw 2
+```
+
+**Root Cause**: The CSV file uses semicolon (`;`) as delimiter instead of comma (`,`), which is common for French/European data files. The default `pd.read_csv()` assumes comma delimiter.
+
+Example file header:
+```
+num_ligne;Rentrée scolaire;Code région académique;...
+```
+
+**Solution**: Added automatic delimiter detection using Python's `csv.Sniffer()` class:
+1. Read first 8KB of file
+2. Use `csv.Sniffer().sniff()` to detect delimiter from sample
+3. Fall back to comparing semicolon vs comma count if sniffer fails
+4. Pass detected delimiter to `pd.read_csv(sep=...)`
+
+**File**: `intuitiveness/ui/quality_dashboard.py` (lines 257-275)
+
+**Code Change**:
+```python
+# BEFORE (assumed comma delimiter)
+df = pd.read_csv(uploaded_file)
+
+# AFTER (auto-detect delimiter)
+import csv
+sample = uploaded_file.read(8192).decode('utf-8', errors='replace')
+uploaded_file.seek(0)  # Reset file position
+
+try:
+    dialect = csv.Sniffer().sniff(sample, delimiters=',;\t|')
+    sep = dialect.delimiter
+except csv.Error:
+    # Fallback: check if semicolon is more common than comma
+    sep = ';' if sample.count(';') > sample.count(',') else ','
+
+df = pd.read_csv(uploaded_file, sep=sep, encoding='utf-8', on_bad_lines='warn')
+```
+
+**Lesson**: European data files often use semicolon delimiter (because comma is used for decimal numbers in French/German locales). Always auto-detect the delimiter instead of assuming comma.
+
+---
+
+## TabPFN API Rate Limit: Switching to Local Inference (2025-12-15)
+
+**Problem**: TabPFN cloud API returns rate limit errors after intensive use:
+```
+Error: TabPFN API rate limit exceeded. Please try again later.
+```
+
+**Root Cause**: The TabPFN cloud API (tabpfn-client) has usage limits. For development and testing, local inference is more reliable.
+
+**Solution**: Updated `TabPFNWrapper` to prefer local inference by default via environment variable.
+
+**Configuration**:
+- `TABPFN_PREFER_LOCAL=1` (default): Use local TabPFN first, fall back to cloud API
+- `TABPFN_PREFER_LOCAL=0`: Use cloud API first, fall back to local TabPFN
+
+**Machine Requirements for Local TabPFN**:
+- Apple Silicon (M1/M2/M3): Works with MPS (Metal Performance Shaders)
+- 8GB+ RAM recommended
+- PyTorch with MPS support
+
+**Verification**:
+```python
+import torch
+print(f"MPS available: {torch.backends.mps.is_available()}")
+# Should print: MPS available: True
+
+from intuitiveness.quality.tabpfn_wrapper import TabPFNWrapper
+wrapper = TabPFNWrapper(task_type="classification")
+print(f"Backend: {wrapper.backend}")
+# Should print: Backend: local
+```
+
+**Files Modified**: `intuitiveness/quality/tabpfn_wrapper.py`
+
+**Code Changes**:
+```python
+# Added environment variable support
+import os
+_PREFER_LOCAL_DEFAULT = os.environ.get("TABPFN_PREFER_LOCAL", "1") == "1"
+
+# Updated TabPFNWrapper.__init__()
+def __init__(self, task_type="classification", prefer_local=None, timeout=60.0):
+    self.prefer_local = prefer_local if prefer_local is not None else _PREFER_LOCAL_DEFAULT
+    # ...
+
+# Updated get_tabpfn_model()
+def get_tabpfn_model(task_type="classification", prefer_local=None):
+    if prefer_local is None:
+        prefer_local = _PREFER_LOCAL_DEFAULT
+    return TabPFNWrapper(task_type=task_type, prefer_local=prefer_local)
+```
+
+**Lesson**: For development, prefer local inference to avoid API rate limits. Local TabPFN is fast enough for development workflows on modern hardware.
+
+---
+
+## TabPFN Import Error in Jupyter: Corrupted PyTorch (2025-12-15)
+
+**Problem**: Using exported code snippet in Jupyter notebook fails with:
+```
+ImportError: dlopen(...torch/_C.cpython-311-darwin.so): Library not loaded: @rpath/libtorch_cpu.dylib
+```
+
+Full traceback shows hardcoded build paths like `/Users/runner/work/_temp/anaconda/envs/wheel_py311/lib/` that don't exist.
+
+**Root Cause**: Environment mismatch. The Jupyter notebook uses the `anaconda3` environment which has a corrupted/incomplete PyTorch installation, while TabPFN works correctly in the project's `myenv311` virtual environment.
+
+The error occurs because:
+1. PyTorch wheels sometimes bake in build-time paths
+2. A corrupted conda installation or pip/conda conflict caused missing `libtorch_cpu.dylib`
+3. Jupyter kernel uses wrong Python environment
+
+**Solution Options**:
+
+**Option A: Use myenv311 as Jupyter kernel** (Recommended)
+```bash
+source /Users/arthursarazin/Documents/data_redesign_method/myenv311/bin/activate
+pip install ipykernel
+python -m ipykernel install --user --name=myenv311 --display-name="Python (myenv311)"
+# Then restart Jupyter and select "Python (myenv311)" kernel
+```
+
+**Option B: Fix anaconda PyTorch**
+```bash
+conda activate base
+pip uninstall torch torchvision torchaudio
+pip install torch torchvision torchaudio
+```
+
+**Option C: Use exported code without TabPFN** (updated exporter)
+The Export & Go code snippet now includes a try/except fallback:
+- Tries TabPFN first
+- Falls back to GradientBoosting if TabPFN unavailable
+- Shows install instructions
+
+**Files Modified**: `intuitiveness/quality/exporter.py`
+
+**Code Change**:
+```python
+# Now generates code with fallback:
+try:
+    from tabpfn import TabPFNClassifier
+    model = TabPFNClassifier()
+    model.fit(X_train, y_train)
+    print("✓ Using TabPFN (same model as quality assessment)")
+except ImportError:
+    print("⚠ TabPFN not available, using GradientBoosting fallback")
+    print("  Install TabPFN: pip install tabpfn")
+    from sklearn.ensemble import GradientBoostingClassifier
+    model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+```
+
+**Lesson**: When generating code for external use (Export & Go), always include fallbacks for optional dependencies. Users may have different environments with missing packages.
+
+---
+
+## TabPFN Classifier: Too Many Classes (2025-12-15)
+
+**Problem**: TabPFN Classifier fails with:
+```
+ValueError: Number of classes 28 exceeds the maximal number of classes supported by TabPFN.
+```
+
+**Root Cause**: TabPFN Classifier only supports up to 10 classes. The target column has more unique values.
+
+**Common Scenario**: A continuous variable like "Taux de réussite G" (success rate %) was detected as classification because:
+- `detect_task_type()` uses the rule: if unique_values < 5% of total rows → classification
+- 28 unique values in 600 rows = 4.6% → classified as classification
+- But percentages should typically use **regression**, not classification
+
+**Solutions**:
+
+**Option A: Use Regression (if target is continuous)**
+```python
+# If your target is a percentage/rate/continuous value, use regression:
+from tabpfn import TabPFNRegressor
+model = TabPFNRegressor()
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+from sklearn.metrics import r2_score, mean_squared_error
+print(f"R² Score: {r2_score(y_test, y_pred):.3f}")
+print(f"RMSE: {mean_squared_error(y_test, y_pred, squared=False):.3f}")
+```
+
+**Option B: Use sklearn for many-class classification**
+```python
+# If you genuinely have 28+ categories:
+from sklearn.ensemble import GradientBoostingClassifier
+model = GradientBoostingClassifier(n_estimators=100, random_state=42)
+model.fit(X_train, y_train)
+print(f"Accuracy: {model.score(X_test, y_test):.2%}")
+```
+
+**Option C: Bin into fewer categories first**
+```python
+# Convert continuous to 5 categories
+df['target_binned'] = pd.qcut(df['Taux de réussite G'], q=5, labels=['Very Low', 'Low', 'Medium', 'High', 'Very High'])
+```
+
+**Files Modified**: `intuitiveness/quality/exporter.py` - Complete rewrite with `smart_model_fit()` function.
+
+**Final Robust Solution**: The exporter now generates a `smart_model_fit()` function that:
+1. Auto-detects task type at runtime (not just at export time)
+2. Checks if >20 unique numeric values → switches to regression
+3. Checks TabPFN's 10-class limit before attempting fit
+4. Catches ALL exceptions (ImportError, ValueError, RuntimeError, etc.)
+5. Falls back to sklearn GradientBoosting which has no limits
+6. Provides clear emoji-based feedback about what's happening
+
+**Lesson**: When generating code for external use, don't trust pre-computed values. Re-analyze the data at runtime and handle ALL possible failure modes gracefully.
+
+---
+
+## Misleading "Classes" Warning for Regression Data (2025-12-15)
+
+**Problem**: When loading continuous data (like success rates), the UI shows:
+```
+⚠️ Target has 29 classes (TabPFN optimal: ≤10). Consider grouping rare classes.
+```
+
+This warning is misleading because continuous data should use **regression**, not classification, and regression has no class limit.
+
+**Root Cause**: `estimate_api_consumption()` in `tabpfn_wrapper.py` didn't know the task type. It counted unique values as "classes" and warned regardless of whether the data was classification or regression.
+
+**Solution**:
+1. Added `task_type` parameter to `estimate_api_consumption()`
+2. Updated `quality_dashboard.py` to detect task type BEFORE calling the estimate function
+3. Only show the "classes" warning when `task_type == "classification"`
+4. Updated the UI to show task-type-aware info:
+   - Regression: "29 unique values (continuous → regression)"
+   - Classification: "5 classes (classification)"
+
+**Files Modified**:
+- `intuitiveness/quality/tabpfn_wrapper.py` - Added task_type parameter, made class warning conditional
+- `intuitiveness/ui/quality_dashboard.py` - Detect task type early, pass to estimate function
+
+**Lesson**: Warnings should be context-aware. A "classes" warning is meaningless and confusing for regression tasks.
+
+---
+
+## Grafo MCP: Attribute Creation Returns "Resource Not Found" (2026-01-09)
+
+**Problem**: When building an ontology in Grafo MCP, attempting to add attributes to concepts fails with:
+```
+Error: Resource not found
+```
+
+Despite the concepts existing and being visible via `grafo_list_concepts()`.
+
+**Root Cause**: Bug in the Grafo MCP server (`grafo-mcp-server/src/index.ts`). The MCP server uses wrong API endpoints:
+
+```typescript
+// BUGGY CODE in index.ts (line ~1000-1018)
+// grafo_create_attribute handler uses:
+const endpoint = parent_type === "concept"
+  ? `/concepts/${parent_id}/attributes`  // WRONG - not document-scoped
+  : `/relationships/${parent_id}/attributes`;
+```
+
+The Grafo REST API requires **document-scoped paths** for all concept operations:
+- **Wrong**: `/concepts/{id}/attributes` → Returns 404
+- **Correct**: `/documents/{doc_id}/concepts/{id}/attributes` → Works
+
+Additionally, the API field name for attributes is `label`, not `name`.
+
+**Solution**: Use direct curl API calls with the correct endpoint:
+
+```bash
+# Working command pattern:
+DOC_ID="your-document-id"
+CONCEPT_ID="node-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+TOKEN="your-grafo-api-token"
+
+curl -s -X POST "https://app.gra.fo/api/v1/documents/${DOC_ID}/concepts/${CONCEPT_ID}/attributes" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "attribute_name", "description": "attribute description"}'
+```
+
+**Key Points**:
+1. **Endpoint**: Use document-scoped path `/documents/{doc_id}/concepts/{concept_id}/attributes`
+2. **Field name**: Use `label` not `name` for the attribute name
+3. **Token**: Get from `~/.claude/mcp.json` under `grafo.env.GRAFO_API_TOKEN`
+
+**MCP Server Fix Needed** (for future reference):
+In `/Users/arthursarazin/Documents/ontoKit/grafo-mcp-server/src/index.ts`, the `grafo_create_attribute` handler should be updated to:
+
+```typescript
+// FIXED CODE
+const document_id = args.document_id;  // Need to add this param
+const endpoint = parent_type === "concept"
+  ? `/documents/${document_id}/concepts/${parent_id}/attributes`
+  : `/documents/${document_id}/relationships/${parent_id}/attributes`;
+```
+
+**Constitution Compliance**: After using the direct API fix:
+- **"No orphan entity nodes"**: ✅ All 24 concepts connected via 29 relationships
+- **"No relationships without attribute"**: ✅ All relationships have label and description
+- **"All entities should have at least one property"**: ✅ All 24 concepts have 1-4 attributes each
+
+**File Affected**: Grafo MCP Server at `/Users/arthursarazin/Documents/ontoKit/grafo-mcp-server/src/index.ts`
+
+**Lesson**: When MCP tools fail, investigate the underlying API directly with curl to identify endpoint mismatches.

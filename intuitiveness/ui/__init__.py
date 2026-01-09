@@ -133,6 +133,10 @@ from .tutorial import (
     TUTORIAL_STEPS,
 )
 
+# Quality Data Platform (009-quality-data-platform)
+from .quality_dashboard import render_quality_dashboard
+from .catalog_browser import render_catalog_browser
+
 # Ascent UI forms (004-ascent-precision)
 from .ascent_forms import (
     # Form renderers
@@ -281,4 +285,7 @@ __all__ = [
     'SESSION_KEY_TUTORIAL_COMPLETED',
     'SESSION_KEY_TUTORIAL_STEP',
     'TUTORIAL_STEPS',
+    # Quality Data Platform (009-quality-data-platform)
+    'render_quality_dashboard',
+    'render_catalog_browser',
 ]

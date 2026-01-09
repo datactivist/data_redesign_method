@@ -20,16 +20,22 @@ from intuitiveness.quality.models import (
     TransformationResult,
     TransformationLog,
     ReadinessIndicator,
+    TabPFNDiagnostics,
 )
 from intuitiveness.quality.tabpfn_wrapper import TabPFNWrapper, is_tabpfn_available
+# Phase 2: Use consolidated utilities (011-code-simplification)
+from intuitiveness.utils import (
+    detect_task_type,
+    detect_feature_type,
+    MIN_ROWS_FOR_ASSESSMENT,
+    MAX_ROWS_FOR_TABPFN,
+    MAX_FEATURES_FOR_TABPFN,
+    HIGH_CARDINALITY_THRESHOLD,
+)
 
 logger = logging.getLogger(__name__)
 
-# Constants
-MIN_ROWS_FOR_ASSESSMENT = 50
-MAX_ROWS_FOR_TABPFN = 10000
-MAX_FEATURES_FOR_TABPFN = 500
-HIGH_CARDINALITY_THRESHOLD = 100  # Categorical with >100 unique values
+# Constants - now imported from utils/common.py
 SAMPLE_SIZE = 5000  # Default sample size for large datasets
 
 
@@ -47,52 +53,8 @@ class DatasetWarning:
         return len(self.warnings) > 0
 
 
-def detect_task_type(y: pd.Series) -> Literal["classification", "regression"]:
-    """
-    Auto-detect whether the target column is for classification or regression.
-
-    Args:
-        y: Target column series.
-
-    Returns:
-        "classification" or "regression"
-    """
-    # Check if target is categorical or has few unique values
-    if y.dtype == "object" or y.dtype.name == "category":
-        return "classification"
-
-    n_unique = y.nunique()
-    n_total = len(y)
-
-    # If less than 20 unique values or less than 5% of total, treat as classification
-    if n_unique <= 20 or (n_unique / n_total) < 0.05:
-        return "classification"
-
-    return "regression"
-
-
-def detect_feature_type(
-    series: pd.Series,
-) -> Literal["numeric", "categorical", "boolean", "datetime"]:
-    """
-    Detect the type of a feature column.
-
-    Args:
-        series: Feature column series.
-
-    Returns:
-        Feature type string.
-    """
-    if pd.api.types.is_bool_dtype(series):
-        return "boolean"
-    if pd.api.types.is_datetime64_any_dtype(series):
-        return "datetime"
-    if pd.api.types.is_numeric_dtype(series):
-        # Check if it's really categorical (few unique values)
-        if series.nunique() <= 10:
-            return "categorical"
-        return "numeric"
-    return "categorical"
+# Note: detect_task_type and detect_feature_type now imported from utils/common.py
+# This eliminates ~45 lines of duplicated code (Phase 2 consolidation)
 
 
 def compute_feature_profile(
@@ -440,6 +402,7 @@ def compute_feature_importance(
     y: pd.Series,
     task_type: Literal["classification", "regression"],
     n_folds: int = 3,
+    progress_callback: Optional[Callable[[str, float], None]] = None,
 ) -> List[Tuple[str, float]]:
     """
     Compute feature importance via ablation study.
@@ -451,10 +414,15 @@ def compute_feature_importance(
         y: Target Series.
         task_type: Classification or regression.
         n_folds: Number of cross-validation folds.
+        progress_callback: Optional callback for progress updates (message, progress 0-1).
 
     Returns:
         List of (feature_name, importance_score) tuples.
     """
+    def report_progress(message: str, progress: float):
+        if progress_callback:
+            progress_callback(message, progress)
+
     available, _ = is_tabpfn_available()
     if not available:
         # Return equal importance if TabPFN not available
@@ -462,6 +430,7 @@ def compute_feature_importance(
 
     try:
         # Get baseline score
+        report_progress("Computing baseline score...", 0.0)
         wrapper = TabPFNWrapper(task_type=task_type)
 
         if task_type == "classification":
@@ -474,7 +443,12 @@ def compute_feature_importance(
 
         # Compute importance for each feature
         importance_list = []
-        for col in X.columns:
+        n_features = len(X.columns)
+        for i, col in enumerate(X.columns):
+            # Progress: 10% for baseline, 90% for features
+            feature_progress = 0.1 + (0.9 * i / n_features)
+            report_progress(f"Analyzing feature {i+1}/{n_features}: {col}", feature_progress)
+
             X_ablated = X.drop(columns=[col])
             if X_ablated.shape[1] == 0:
                 importance_list.append((col, 1.0))
@@ -510,30 +484,104 @@ def compute_feature_importance(
         return [(col, 1.0 / len(X.columns)) for col in X.columns]
 
 
+def compute_permutation_importance(
+    X: pd.DataFrame,
+    y: pd.Series,
+    task_type: Literal["classification", "regression"],
+    n_repeats: int = 5,
+) -> List[Tuple[str, float]]:
+    """
+    Compute permutation importance as fallback for SHAP.
+
+    Permutation importance measures how much the model's score decreases
+    when a feature is randomly shuffled. This is faster and more robust
+    than SHAP's KernelExplainer.
+
+    Args:
+        X: Feature DataFrame.
+        y: Target Series.
+        task_type: Classification or regression.
+        n_repeats: Number of times to shuffle each feature.
+
+    Returns:
+        List of (feature_name, importance) tuples.
+    """
+    from sklearn.inspection import permutation_importance as sklearn_perm_importance
+
+    available, _ = is_tabpfn_available()
+    if not available:
+        logger.warning("TabPFN not available for permutation importance")
+        return [(col, 1.0 / len(X.columns)) for col in X.columns]
+
+    try:
+        # Fit TabPFN model
+        wrapper = TabPFNWrapper(task_type=task_type)
+        wrapper.fit(X.values, y.values)
+
+        # Use sklearn's permutation importance (more robust than manual)
+        result = sklearn_perm_importance(
+            wrapper.model,
+            X.values,
+            y.values,
+            n_repeats=n_repeats,
+            random_state=42,
+            scoring="accuracy" if task_type == "classification" else "r2",
+        )
+
+        # Normalize to 0-1 range
+        importances = result.importances_mean
+        if importances.max() > 0:
+            importances = importances / importances.max()
+        else:
+            importances = np.ones(len(X.columns)) / len(X.columns)
+
+        return list(zip(X.columns, importances))
+
+    except Exception as e:
+        logger.warning(f"Permutation importance failed: {e}")
+        return [(col, 1.0 / len(X.columns)) for col in X.columns]
+
+
 def compute_shap_values(
     X: pd.DataFrame,
     y: pd.Series,
     task_type: Literal["classification", "regression"],
     max_samples: int = 100,
-) -> List[Tuple[str, float]]:
+    timeout_seconds: int = 60,
+) -> Tuple[List[Tuple[str, float]], str, Optional[str], bool]:
     """
     Compute mean absolute SHAP values for each feature.
+
+    P0 FIX: Now returns error status and falls back to permutation importance.
+    This addresses the silent failure issue where SHAP showed "-" for all features.
 
     Args:
         X: Feature DataFrame.
         y: Target Series.
         task_type: Classification or regression.
         max_samples: Maximum samples for SHAP computation.
+        timeout_seconds: Maximum time for SHAP computation.
 
     Returns:
-        List of (feature_name, mean_shap) tuples.
+        Tuple of:
+        - List of (feature_name, importance) tuples
+        - Status: "success" | "failed" | "fallback"
+        - Error message (None if success)
+        - Whether fallback was used
     """
+    import signal
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError("SHAP computation timed out")
+
     try:
         import shap
 
         available, _ = is_tabpfn_available()
         if not available:
-            return [(col, 0.0) for col in X.columns]
+            # Fall back to permutation importance
+            values = compute_permutation_importance(X, y, task_type)
+            return values, "fallback", "TabPFN not available", True
 
         # Sample data if too large
         if len(X) > max_samples:
@@ -561,8 +609,24 @@ def compute_shap_values(
                 wrapper.model.predict, background
             )
 
-        # Compute SHAP values
-        shap_values = explainer.shap_values(X_sample.values[:min(20, len(X_sample))])
+        # Set timeout (Unix only - graceful fallback on Windows)
+        try:
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(timeout_seconds)
+        except (AttributeError, ValueError):
+            # Windows doesn't support SIGALRM
+            pass
+
+        try:
+            # Compute SHAP values
+            shap_values = explainer.shap_values(X_sample.values[:min(20, len(X_sample))])
+        finally:
+            # Reset timeout
+            try:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+            except (AttributeError, ValueError, NameError):
+                pass
 
         # Handle multi-class case
         if isinstance(shap_values, list):
@@ -573,11 +637,22 @@ def compute_shap_values(
         # Compute mean absolute SHAP per feature
         mean_shap = np.mean(shap_values, axis=0)
 
-        return list(zip(X.columns, mean_shap))
+        return list(zip(X.columns, mean_shap)), "success", None, False
+
+    except TimeoutError as e:
+        logger.warning(f"SHAP computation timed out after {timeout_seconds}s, falling back to permutation importance")
+        values = compute_permutation_importance(X, y, task_type)
+        return values, "fallback", f"SHAP timed out: {e}", True
+
+    except ImportError as e:
+        logger.warning(f"SHAP library not available: {e}, falling back to permutation importance")
+        values = compute_permutation_importance(X, y, task_type)
+        return values, "fallback", f"SHAP not installed: {e}", True
 
     except Exception as e:
-        logger.warning(f"SHAP computation failed: {e}")
-        return [(col, 0.0) for col in X.columns]
+        logger.warning(f"SHAP computation failed: {e}, falling back to permutation importance")
+        values = compute_permutation_importance(X, y, task_type)
+        return values, "fallback", f"SHAP failed: {e}", True
 
 
 def assess_dataset(
@@ -661,11 +736,17 @@ def assess_dataset(
     feature_diversity = compute_feature_diversity(df, target_column)
     size_appropriateness = compute_size_appropriateness(original_row_count)
 
-    report_progress("Computing prediction quality", 0.3)
+    report_progress("Computing prediction quality (fold 1/5)", 0.2)
 
     # Compute prediction quality via TabPFN cross-validation
+    # P0 FIX: Capture per-fold scores for full transparency
     prediction_quality = 0.0
+    fold_scores = []
     available, backend = is_tabpfn_available()
+
+    # Initialize TabPFN diagnostics
+    tabpfn_diagnostics = TabPFNDiagnostics()
+
     if available:
         try:
             wrapper = TabPFNWrapper(task_type=task_type)
@@ -675,9 +756,43 @@ def assess_dataset(
             else:
                 cv = KFold(n_splits=5, shuffle=True, random_state=42)
 
-            scores = cross_val_score(wrapper.model, X.values, y.values, cv=cv)
+            # Manual CV loop for per-fold progress (0.2 to 0.4)
+            X_arr, y_arr = X.values, y.values
+            fold_scores = []
+            for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X_arr, y_arr)):
+                # Progress from 0.2 to 0.4 across 5 folds
+                fold_progress = 0.2 + (0.2 * fold_idx / 5)
+                report_progress(f"Computing prediction quality (fold {fold_idx + 1}/5)", fold_progress)
+
+                X_train, X_test = X_arr[train_idx], X_arr[test_idx]
+                y_train, y_test = y_arr[train_idx], y_arr[test_idx]
+
+                wrapper.model.fit(X_train, y_train)
+                score = wrapper.model.score(X_test, y_test)
+                fold_scores.append(score)
+
+            scores = np.array(fold_scores)
             prediction_quality = np.mean(scores) * 100  # Convert to 0-100
-            logger.info(f"Prediction quality: {prediction_quality:.1f}% (backend: {backend})")
+
+            # Update TabPFN diagnostics with CV results
+            tabpfn_diagnostics.fold_scores = fold_scores
+            tabpfn_diagnostics.mean_accuracy = float(np.mean(scores))
+            tabpfn_diagnostics.std_accuracy = float(np.std(scores))
+
+            # Capture categorical/numeric features used
+            tabpfn_diagnostics.numeric_features_used = [
+                col for col in X.columns
+                if X[col].dtype in [np.float64, np.float32, np.int64, np.int32]
+            ]
+            tabpfn_diagnostics.categorical_features_detected = [
+                col for col in X.columns
+                if col not in tabpfn_diagnostics.numeric_features_used
+            ]
+
+            logger.info(
+                f"Prediction quality: {prediction_quality:.1f}% ± {np.std(scores)*100:.1f}% "
+                f"(backend: {backend}, folds: {fold_scores})"
+            )
         except Exception as e:
             logger.warning(f"TabPFN scoring failed: {e}")
             prediction_quality = 50.0  # Default to middle score
@@ -685,19 +800,38 @@ def assess_dataset(
         logger.warning("TabPFN not available, using default prediction quality")
         prediction_quality = 50.0
 
-    report_progress("Computing feature importance", 0.5)
+    report_progress(f"Computing feature importance (0/{len(X.columns)} features)", 0.4)
 
-    # Compute feature importance
-    importance_list = compute_feature_importance(X, y, task_type)
+    # Compute feature importance with granular progress
+    # Feature importance takes 40% of total time (0.4 to 0.75)
+    def feature_importance_progress(message: str, sub_progress: float):
+        # Map sub_progress (0-1) to overall progress (0.4 to 0.75)
+        overall_progress = 0.4 + (sub_progress * 0.35)
+        report_progress(f"Feature importance: {message}", overall_progress)
+
+    importance_list = compute_feature_importance(
+        X, y, task_type, progress_callback=feature_importance_progress
+    )
     importance_dict = dict(importance_list)
 
-    report_progress("Computing SHAP values", 0.7)
+    report_progress("Computing SHAP values", 0.75)
 
     # Compute SHAP values if requested
+    # P0 FIX: Handle new tuple return with error status and fallback
     shap_dict = {}
     if compute_shap:
-        shap_list = compute_shap_values(X, y, task_type)
+        shap_list, shap_status, shap_error, shap_fallback = compute_shap_values(X, y, task_type)
         shap_dict = dict(shap_list)
+
+        # Update diagnostics with SHAP status
+        tabpfn_diagnostics.shap_status = shap_status
+        tabpfn_diagnostics.shap_error_message = shap_error
+        tabpfn_diagnostics.shap_fallback_used = shap_fallback
+
+        if shap_fallback:
+            logger.info(f"SHAP used fallback (permutation importance): {shap_error}")
+    else:
+        tabpfn_diagnostics.shap_status = "not_computed"
 
     report_progress("Building feature profiles", 0.9)
 
@@ -737,6 +871,7 @@ def assess_dataset(
         feature_count=len(feature_columns),
         sampled=sampled,
         sample_size=sample_size,
+        tabpfn_diagnostics=tabpfn_diagnostics,  # P0 FIX: Full transparency
     )
 
 

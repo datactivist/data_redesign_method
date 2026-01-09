@@ -77,6 +77,9 @@ from intuitiveness.ui import (
     render_page_header,
     render_section_header,
     card,
+    # Quality Data Platform (009-quality-data-platform)
+    render_quality_dashboard,
+    render_catalog_browser,
     separator,
     spacer,
     # Data.gouv.fr search interface (008-datagouv-search)
@@ -116,6 +119,12 @@ from intuitiveness.styles.charts import (
     render_metrics_row,
     KLEIN_BLUE,
     CHART_COLORS,
+)
+# Phase 0 utilities (011-code-simplification)
+from intuitiveness.utils import (
+    init_session_state as utils_init_session_state,
+    SessionStateKeys,
+    session,
 )
 import csv
 import io
@@ -244,58 +253,14 @@ def format_l0_value_for_display(value: Any) -> str:
 # ============================================================================
 
 def init_session_state():
-    """Initialize Streamlit session state for the redesign workflow."""
-    if 'current_step' not in st.session_state:
-        st.session_state.current_step = 0
+    """
+    Initialize Streamlit session state for the redesign workflow.
 
-    if 'answers' not in st.session_state:
-        st.session_state.answers = {}
-
-    if 'datasets' not in st.session_state:
-        st.session_state.datasets = {}
-
-    if 'data_model' not in st.session_state:
-        st.session_state.data_model = None
-
-    if 'raw_data' not in st.session_state:
-        st.session_state.raw_data = None
-
-    # Free Navigation Mode (002-ascent-functionality)
-    if 'nav_mode' not in st.session_state:
-        st.session_state.nav_mode = 'guided'  # 'guided' or 'free'
-
-    if 'nav_session' not in st.session_state:
-        st.session_state.nav_session = None
-
-    if 'nav_action' not in st.session_state:
-        st.session_state.nav_action = None
-
-    if 'nav_target' not in st.session_state:
-        st.session_state.nav_target = None
-
-    if 'nav_export' not in st.session_state:
-        st.session_state.nav_export = None
-
-    if 'relationship_builder' not in st.session_state:
-        st.session_state.relationship_builder = None
-
-    # Free Navigation descent workflow state
-    if 'nav_descend_step' not in st.session_state:
-        st.session_state.nav_descend_step = 1  # 1=define entities, 2=preview model, 3=cypher queries
-    if 'nav_temp_data_model' not in st.session_state:
-        st.session_state.nav_temp_data_model = None
-    if 'nav_temp_cypher_queries' not in st.session_state:
-        st.session_state.nav_temp_cypher_queries = None
-    if 'nav_neo4j_executed' not in st.session_state:
-        st.session_state.nav_neo4j_executed = False
-
-    # Neo4j execution state (Guided mode)
-    if 'neo4j_executed' not in st.session_state:
-        st.session_state.neo4j_executed = False
-
-    # Column mapping for graph building
-    if 'column_mapping' not in st.session_state:
-        st.session_state.column_mapping = {}
+    Delegates to centralized session manager (Phase 0 - 011-code-simplification).
+    Session keys and defaults are defined in utils/session_manager.py
+    with spec traceability comments.
+    """
+    utils_init_session_state()
 
 
 def _get_sidebar_branding_html() -> str:
@@ -4691,17 +4656,17 @@ def main():
     init_session_state()
 
     # Handle ascent mode switch (before sidebar widget renders)
-    if st.session_state.get('_switch_to_ascent'):
-        del st.session_state['_switch_to_ascent']
-        st.session_state.nav_mode = 'free'
+    if st.session_state.get(SessionStateKeys.SWITCH_TO_ASCENT):
+        del st.session_state[SessionStateKeys.SWITCH_TO_ASCENT]
+        st.session_state[SessionStateKeys.NAV_MODE] = 'free'
         # Delete widget key so it reinitializes with new nav_mode value
-        if 'mode_selector' in st.session_state:
-            del st.session_state['mode_selector']
+        if SessionStateKeys.MODE_SELECTOR in st.session_state:
+            del st.session_state[SessionStateKeys.MODE_SELECTOR]
 
     # Keep free mode when in ascent workflow (has loaded_session_graph)
     # This prevents the radio widget from resetting nav_mode during ascent
-    if st.session_state.get('loaded_session_graph') and st.session_state.nav_mode != 'free':
-        st.session_state.nav_mode = 'free'
+    if st.session_state.get(SessionStateKeys.LOADED_SESSION_GRAPH) and st.session_state.get(SessionStateKeys.NAV_MODE) != 'free':
+        st.session_state[SessionStateKeys.NAV_MODE] = 'free'
 
     # Session persistence (005-session-persistence)
     store = SessionStore()
@@ -4736,9 +4701,9 @@ def main():
     # Check if we're on the pure landing page (no data, no search performed)
     # In this state, we hide EVERYTHING except the search bar
     is_pure_landing = (
-        st.session_state.nav_mode == 'guided' and
-        st.session_state.current_step == 0 and
-        st.session_state.raw_data is None and
+        st.session_state.get(SessionStateKeys.NAV_MODE) == 'guided' and
+        st.session_state.get(SessionStateKeys.CURRENT_STEP) == 0 and
+        st.session_state.get(SessionStateKeys.RAW_DATA) is None and
         not st.session_state.get('datagouv_loaded_datasets') and
         not st.session_state.get('datagouv_results')  # No search results yet
     )
@@ -4798,6 +4763,26 @@ def main():
 
             st.divider()
 
+            # Data modeling Tools section (009-quality-data-platform)
+            st.markdown("### Data modeling Tools")
+            quality_tool = st.radio(
+                "Select tool",
+                options=['none', 'quality', 'catalog'],
+                format_func=lambda x: {
+                    'none': 'None',
+                    'quality': '📊 Quality Assessment',
+                    'catalog': '📁 Dataset Catalog'
+                }.get(x, x),
+                index=0,
+                key='quality_tool_selector',
+                label_visibility='collapsed',
+            )
+            if quality_tool != st.session_state.get('active_quality_tool', 'none'):
+                st.session_state.active_quality_tool = quality_tool
+                st.rerun()
+
+            st.divider()
+
             # Free exploration mode - render exploration tree (only when active)
             if st.session_state.nav_mode == 'free' and st.session_state.nav_session:
                 render_free_navigation_sidebar()
@@ -4831,6 +4816,15 @@ def main():
                     st.rerun()
 
     # Main content
+    # Check for Quality Tools (009-quality-data-platform)
+    active_quality_tool = st.session_state.get('active_quality_tool', 'none')
+    if active_quality_tool == 'quality':
+        render_quality_dashboard()
+        return
+    elif active_quality_tool == 'catalog':
+        render_catalog_browser()
+        return
+
     if st.session_state.nav_mode == 'guided':
         # Check if we're in the search/selection flow (hide header throughout)
         # This includes: landing page, search results, and basket selection

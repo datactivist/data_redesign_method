@@ -12,12 +12,19 @@ Includes timeout handling for graceful degradation.
 import logging
 import signal
 import functools
-from typing import Optional, Literal, Tuple, Any
+import os
+from dataclasses import dataclass
+from typing import Optional, Literal, Tuple, Any, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Environment variable to control backend preference
+# Set TABPFN_PREFER_LOCAL=1 to prefer local inference
+# Set TABPFN_PREFER_LOCAL=0 to prefer cloud API (default - faster on most machines)
+_PREFER_LOCAL_DEFAULT = os.environ.get("TABPFN_PREFER_LOCAL", "0") == "1"
 
 
 class TabPFNTimeoutError(Exception):
@@ -100,7 +107,7 @@ class TabPFNWrapper:
     def __init__(
         self,
         task_type: Literal["classification", "regression"] = "classification",
-        prefer_local: bool = False,
+        prefer_local: Optional[bool] = None,
         timeout: float = 60.0,
     ):
         """
@@ -109,10 +116,11 @@ class TabPFNWrapper:
         Args:
             task_type: Type of prediction task.
             prefer_local: If True, try local TabPFN before cloud API.
+                         Defaults to TABPFN_PREFER_LOCAL env var (default: True).
             timeout: Timeout in seconds for API calls.
         """
         self.task_type = task_type
-        self.prefer_local = prefer_local
+        self.prefer_local = prefer_local if prefer_local is not None else _PREFER_LOCAL_DEFAULT
         self.timeout = timeout
         self.backend: Optional[str] = None
         self.model: Optional[Any] = None
@@ -278,7 +286,7 @@ class TabPFNWrapper:
 
 def get_tabpfn_model(
     task_type: Literal["classification", "regression"] = "classification",
-    prefer_local: bool = False,
+    prefer_local: Optional[bool] = None,
 ) -> TabPFNWrapper:
     """
     Factory function to get a TabPFN model wrapper.
@@ -286,10 +294,13 @@ def get_tabpfn_model(
     Args:
         task_type: Type of prediction task.
         prefer_local: If True, prefer local TabPFN over cloud API.
+                     Defaults to TABPFN_PREFER_LOCAL env var (default: True).
 
     Returns:
         Configured TabPFNWrapper instance.
     """
+    if prefer_local is None:
+        prefer_local = _PREFER_LOCAL_DEFAULT
     return TabPFNWrapper(task_type=task_type, prefer_local=prefer_local)
 
 
@@ -305,3 +316,179 @@ def is_tabpfn_available() -> Tuple[bool, str]:
     if _TABPFN_LOCAL_AVAILABLE:
         return True, "local"
     return False, "none"
+
+
+@dataclass
+class APIConsumptionEstimate:
+    """Estimate of TabPFN API consumption for quality assessment.
+
+    TabPFN API cost formula per call:
+        api_cost = max((train_rows + test_rows) * n_cols * n_estimators, 5000)
+
+    Where n_estimators = 8 (TabPFN default).
+    """
+
+    # Dataset dimensions
+    n_rows: int
+    n_features: int
+    n_classes: int
+
+    # API call breakdown
+    cv_calls: int  # 5-fold cross-validation
+    feature_importance_calls: int  # Ablation study per feature
+    shap_calls: int  # SHAP/permutation importance
+    total_calls: int
+
+    # TabPFN API cost (using actual formula)
+    cost_per_cv_call: int  # max((train+test) * cols * 8, 5000)
+    cost_per_ablation_call: int  # max((train+test) * (cols-1) * 8, 5000)
+    total_cv_cost: int
+    total_feature_importance_cost: int
+    total_shap_cost: int
+    total_api_cost: int  # Total consumption units
+
+    # Data volume
+    total_cells: int  # rows × features
+
+    # Limits check (TabPFN optimal: ≤10,000 rows, ≤500 features, ≤10 classes)
+    within_row_limit: bool
+    within_feature_limit: bool
+    within_class_limit: bool
+    is_optimal: bool
+
+    # Warnings
+    warnings: List[str]
+
+    def summary(self) -> str:
+        """Human-readable summary of API consumption."""
+        lines = [
+            f"📊 **Dataset**: {self.n_rows:,} rows × {self.n_features} features",
+            f"🏷️ **Target classes**: {self.n_classes}",
+            f"",
+            f"**TabPFN API Cost Formula**: `max((train_rows + test_rows) × cols × 8, 5000)`",
+            f"",
+            f"**API Calls & Cost Breakdown:**",
+            f"  • Cross-validation (5-fold): {self.cv_calls} calls × {self.cost_per_cv_call:,} = **{self.total_cv_cost:,}**",
+            f"  • Feature importance ({self.n_features}+1 ablations × 3 folds): {self.feature_importance_calls} calls = **{self.total_feature_importance_cost:,}**",
+            f"  • SHAP analysis: ~{self.shap_calls} calls = **{self.total_shap_cost:,}**",
+            f"",
+            f"**Total API Cost**: ~{self.total_api_cost:,} units",
+        ]
+
+        if self.is_optimal:
+            lines.append(f"\n✅ Dataset is within TabPFN optimal limits")
+        else:
+            lines.append(f"\n⚠️ **Warnings:**")
+            for warning in self.warnings:
+                lines.append(f"  • {warning}")
+
+        return "\n".join(lines)
+
+
+def estimate_api_consumption(
+    n_rows: int,
+    n_features: int,
+    n_classes: int = 2,
+    cv_folds: int = 5,
+    importance_folds: int = 3,
+    n_estimators: int = 8,
+    task_type: Literal["classification", "regression", "auto"] = "auto",
+) -> APIConsumptionEstimate:
+    """
+    Estimate TabPFN API consumption before running quality assessment.
+
+    Uses the actual TabPFN API cost formula:
+        api_cost = max((num_train_rows + num_test_rows) * num_cols * n_estimators, 5000)
+
+    Args:
+        n_rows: Number of rows in dataset.
+        n_features: Number of feature columns.
+        n_classes: Number of unique target values (only relevant for classification).
+        cv_folds: Number of cross-validation folds (default: 5).
+        importance_folds: Number of folds for feature importance (default: 3).
+        n_estimators: TabPFN ensemble size (default: 8).
+        task_type: "classification", "regression", or "auto" (infers from n_classes).
+
+    Returns:
+        APIConsumptionEstimate with breakdown of expected API usage.
+    """
+    # Auto-detect task type if not specified
+    if task_type == "auto":
+        # If >20 unique values, likely regression
+        task_type = "regression" if n_classes > 20 else "classification"
+    # TabPFN API cost formula: max((train_rows + test_rows) * cols * n_estimators, 5000)
+    # In CV, train+test = all rows, so cost per call = max(n_rows * n_features * 8, 5000)
+
+    def tabpfn_cost(rows: int, cols: int) -> int:
+        """Calculate TabPFN API cost using official formula."""
+        return max(rows * cols * n_estimators, 5000)
+
+    # Calculate API calls
+    cv_calls = cv_folds  # One fit per fold
+
+    # Feature importance: (n_features + 1) ablation runs × importance_folds
+    # +1 for baseline (all features)
+    feature_importance_calls = (n_features + 1) * importance_folds
+
+    # SHAP/permutation importance: roughly n_features × 2 evaluations
+    shap_calls = n_features * 2
+
+    total_calls = cv_calls + feature_importance_calls + shap_calls
+
+    # Calculate costs using TabPFN formula
+    # CV: each fold uses all rows but train/test split doesn't change total
+    cost_per_cv_call = tabpfn_cost(n_rows, n_features)
+    total_cv_cost = cv_calls * cost_per_cv_call
+
+    # Feature importance ablation: each ablation removes 1 feature
+    # Average cost (some calls have n_features, baseline; some have n_features-1)
+    cost_per_ablation_call = tabpfn_cost(n_rows, max(n_features - 1, 1))
+    total_feature_importance_cost = feature_importance_calls * cost_per_ablation_call
+
+    # SHAP: similar to ablation
+    total_shap_cost = shap_calls * cost_per_ablation_call
+
+    # Total API cost
+    total_api_cost = total_cv_cost + total_feature_importance_cost + total_shap_cost
+
+    # Data volume
+    total_cells = n_rows * n_features
+
+    # Check TabPFN optimal limits
+    within_row_limit = n_rows <= 10000
+    within_feature_limit = n_features <= 500
+    # Class limit only applies to classification
+    within_class_limit = n_classes <= 10 if task_type == "classification" else True
+    is_optimal = within_row_limit and within_feature_limit and within_class_limit
+
+    # Generate warnings
+    warnings = []
+    if not within_row_limit:
+        warnings.append(f"Dataset has {n_rows:,} rows (TabPFN optimal: ≤10,000). Consider sampling.")
+    if not within_feature_limit:
+        warnings.append(f"Dataset has {n_features} features (TabPFN optimal: ≤500). Consider feature selection.")
+    # Only warn about classes for classification tasks
+    if task_type == "classification" and not within_class_limit:
+        warnings.append(f"Target has {n_classes} classes (TabPFN optimal: ≤10). Consider grouping rare classes.")
+
+    return APIConsumptionEstimate(
+        n_rows=n_rows,
+        n_features=n_features,
+        n_classes=n_classes,
+        cv_calls=cv_calls,
+        feature_importance_calls=feature_importance_calls,
+        shap_calls=shap_calls,
+        total_calls=total_calls,
+        cost_per_cv_call=cost_per_cv_call,
+        cost_per_ablation_call=cost_per_ablation_call,
+        total_cv_cost=total_cv_cost,
+        total_feature_importance_cost=total_feature_importance_cost,
+        total_shap_cost=total_shap_cost,
+        total_api_cost=total_api_cost,
+        total_cells=total_cells,
+        within_row_limit=within_row_limit,
+        within_feature_limit=within_feature_limit,
+        within_class_limit=within_class_limit,
+        is_optimal=is_optimal,
+        warnings=warnings,
+    )
